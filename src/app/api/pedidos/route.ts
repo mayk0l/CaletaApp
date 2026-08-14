@@ -1,19 +1,97 @@
 import { NextResponse } from "next/server";
-import { apiError } from "@/lib/types";
+import { apiOk, apiError, type PedidoResponse, type MatchResponse, type CandidatoMatch } from "@/lib/types";
+import { prisma } from "@/lib/db";
+import { horasDesde } from "@/lib/pricing";
 
 /**
- * POST /api/pedidos — dueño: Manuel · P1 (sacrificable)
- * Contrato: docs/05-api-contratos.md
- *
- * El matching NO usa LLM y eso es a propósito: para 3 especies y 10 productos un
- * modelo agrega latencia y no-determinismo sin mejorar el resultado. Es scoring
- * por reglas explícitas (especie, frescura, cantidad, caleta) y se presenta así.
- * Decir esto en el pitch suma en el criterio de uso *apropiado* de IA.
+ * POST /api/pedidos — dueño: Manuel
+ * Matching por reglas explícitas (sin LLM, a propósito). docs/06-ia-y-prompts.md
  */
 export async function POST(request: Request) {
-  void request;
-  return NextResponse.json(
-    apiError("INTERNO", "Pedidos aún no implementados (P1)."),
-    { status: 501 },
-  );
+  try {
+    const body = await request.json();
+    const { restauranteId, especie, cantidadKg } = body;
+
+    if (!restauranteId || !especie || !cantidadKg) {
+      return NextResponse.json(
+        apiError("VALIDACION", "Faltan campos: restauranteId, especie, cantidadKg."),
+        { status: 400 },
+      );
+    }
+
+    // Crear pedido
+    const pedido = await prisma.pedido.create({
+      data: {
+        restauranteId,
+        especieNombre: especie,
+        cantidadKg,
+        estado: "cola",
+      },
+    });
+
+    // Matching: productos disponibles de la especie solicitada
+    const productos = await prisma.producto.findMany({
+      where: {
+        estado: "disponible",
+        captura: { especieNombre: especie },
+      },
+      include: { captura: { include: { pescador: true } } },
+    });
+
+    const candidatos: CandidatoMatch[] = productos.map((p) => {
+      const horas = horasDesde(p.publicadoEn);
+
+      // Score: más fresco + más barato = mejor match
+      const scoreFrescura = 1 / (1 + horas);
+      const scorePrecio = p.precioInicialKg > 0
+        ? 1 - p.precioActualKg / p.precioInicialKg
+        : 0;
+      const score = Math.round((scoreFrescura * 0.7 + scorePrecio * 0.3) * 100) / 100;
+
+      let motivo = "";
+      if (horas < 6) motivo = "Producto fresco, recién publicado.";
+      else if (horas < 12) motivo = "Producto del día, con descuento.";
+      else motivo = "Producto con descuento por tiempo.";
+
+      return {
+        productoId: p.id,
+        especie: p.captura.especieNombre as CandidatoMatch["especie"],
+        pesoKg: p.captura.pesoKg,
+        precioActualKg: p.precioActualKg,
+        horasPublicado: Math.round(horas * 10) / 10,
+        score,
+        motivo,
+      };
+    });
+
+    // Ordenar por score descendente
+    candidatos.sort((a, b) => b.score - a.score);
+
+    // Marcar pedido como matcheado si hay resultados
+    if (candidatos.length > 0) {
+      await prisma.pedido.update({
+        where: { id: pedido.id },
+        data: {
+          estado: "match",
+          productoId: candidatos[0].productoId,
+          scoreMatch: candidatos[0].score,
+        },
+      });
+    }
+
+    const response: MatchResponse = { candidatos };
+    return NextResponse.json(apiOk(response));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Error desconocido";
+    return NextResponse.json(apiError("INTERNO", message), { status: 500 });
+  }
+}
+
+/** GET /api/pedidos — lista pedidos para la vista de restaurante */
+export async function GET() {
+  const pedidos = await prisma.pedido.findMany({
+    include: { restaurante: true, producto: true },
+    orderBy: { creadoEn: "desc" },
+  });
+  return NextResponse.json(apiOk(pedidos));
 }
