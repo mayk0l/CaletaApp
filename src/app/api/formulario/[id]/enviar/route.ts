@@ -1,83 +1,101 @@
 import { NextResponse } from "next/server";
-import { apiOk, apiError, type EnvioResponse } from "@/lib/types";
 import { prisma } from "@/lib/db";
-import { PRECIO_BASE_KG } from "@/lib/mocks";
+import { apiError, apiOk, type EnvioResponse } from "@/lib/types";
 
 /**
- * POST /api/formulario/[id]/enviar — dueño: Manuel (id = capturaId)
- * Envío SIMULADO a SERNAPESCA + publicación automática en marketplace.
+ * POST /api/formulario/[id]/enviar — dueño: Manuel  (id = capturaId)
+ * Contrato: docs/05-api-contratos.md
+ *
+ * Envío SIMULADO a SERNAPESCA. Decisión tomada y no reabrir: automatizar el
+ * portal real con navegador headless fue evaluado y descartado por
+ * riesgo/tiempo (docs/06-ia-y-prompts.md, tabla de decisiones).
+ *
+ * Arma el payload real como si se fuera a enviar (se muestra en la demo),
+ * simula latencia, genera folio mock, marca la captura como enviada y
+ * PUBLICA el producto en el marketplace en la misma operación.
  */
 export async function POST(
-  request: Request,
+  _request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  try {
-    const { id } = await context.params;
+  const { id: capturaId } = await context.params;
 
-    const captura = await prisma.captura.findUnique({
-      where: { id },
-      include: { formulario: true, producto: true },
+  const captura = await prisma.captura.findUnique({
+    where: { id: capturaId },
+    include: { formulario: true, producto: true },
+  });
+
+  if (!captura) {
+    return NextResponse.json(apiError("NO_ENCONTRADO", "Captura no encontrada."), {
+      status: 404,
     });
-
-    if (!captura) {
-      return NextResponse.json(
-        apiError("NO_ENCONTRADO", "Captura no encontrada."),
-        { status: 404 },
-      );
-    }
-
-    // Simular envío con folio mock
-    const folioMock = `SP-2026-${String(Math.floor(Math.random() * 900000) + 100000)}`;
-    const enviadoEn = new Date().toISOString();
-
-    // Marcar captura como enviada
-    await prisma.captura.update({
-      where: { id },
-      data: { estado: "enviada" },
-    });
-
-    // Actualizar formulario
-    if (captura.formulario) {
-      await prisma.formulario.update({
-        where: { capturaId: id },
-        data: {
-          estadoEnvio: "enviado_simulado",
-          folioMock,
-          enviadoEn: new Date(),
-        },
-      });
-    }
-
-    // Publicar en marketplace si no existe ya
-    let productoId = captura.producto?.id;
-    if (!captura.producto) {
-      const especie = captura.especieNombre as keyof typeof PRECIO_BASE_KG;
-      const precioInicial = PRECIO_BASE_KG[especie] ?? 5000;
-
-      const producto = await prisma.producto.create({
-        data: {
-          capturaId: id,
-          precioInicialKg: precioInicial,
-          precioActualKg: precioInicial,
-          descuentoPct: 0,
-          publicadoEn: new Date(),
-          ultimoAjuste: new Date(),
-          estado: "disponible",
-        },
-      });
-      productoId = producto.id;
-    }
-
-    const response: EnvioResponse = {
-      folioMock,
-      enviadoEn,
-      simulado: true,
-      productoId: productoId!,
-    };
-
-    return NextResponse.json(apiOk(response));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Error desconocido";
-    return NextResponse.json(apiError("INTERNO", message), { status: 500 });
   }
+  if (!captura.formulario) {
+    return NextResponse.json(
+      apiError("VALIDACION", "Primero hay que generar el formulario (GET /api/formulario/[id])."),
+      { status: 400 },
+    );
+  }
+  if (captura.producto) {
+    // Reintento idempotente: si ya se envió, se devuelve lo que ya existe
+    // en vez de duplicar el producto en el marketplace.
+    const data: EnvioResponse = {
+      folioMock: captura.formulario.folioMock ?? "SP-2026-000000",
+      enviadoEn: (captura.formulario.enviadoEn ?? new Date()).toISOString(),
+      simulado: true,
+      productoId: captura.producto.id,
+    };
+    return NextResponse.json(apiOk(data));
+  }
+
+  const especie = await prisma.especie.findUnique({
+    where: { nombre: captura.especieNombre },
+  });
+  const precioInicialKg = especie?.precioBaseKg ?? 5000;
+
+  // El payload real que "se enviaría" a SERNAPESCA — se muestra en el pitch
+  // como evidencia de que el mock arma el dato real, no solo un texto fijo.
+  const payloadSimulado = {
+    pescadorId: captura.pescadorId,
+    especie: captura.especieNombre,
+    cantidad: captura.cantidad,
+    pesoKg: captura.pesoKg,
+    largoCm: captura.largoCm,
+    metodo: captura.metodo,
+    formulario: captura.formulario.camposVariables,
+  };
+  void payloadSimulado; // se loguearía / mostraría en demo; no hay envío real.
+
+  // Estado de carga visible: la demo se beneficia de que no sea instantáneo.
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+
+  const folioMock = `SP-2026-${String(Math.floor(100000 + Math.random() * 899999))}`;
+  const enviadoEn = new Date();
+
+  const [, producto] = await prisma.$transaction([
+    prisma.formulario.update({
+      where: { capturaId },
+      data: { estadoEnvio: "enviado_simulado", folioMock, enviadoEn },
+    }),
+    prisma.producto.create({
+      data: {
+        capturaId,
+        precioInicialKg,
+        precioActualKg: precioInicialKg,
+        descuentoPct: 0,
+        publicadoEn: enviadoEn,
+        estado: "disponible",
+      },
+    }),
+    prisma.captura.update({ where: { id: capturaId }, data: { estado: "enviada" } }),
+  ]);
+
+  const data: EnvioResponse = {
+    folioMock,
+    enviadoEn: enviadoEn.toISOString(),
+    simulado: true,
+    productoId: producto.id,
+  };
+
+  return NextResponse.json(apiOk(data));
 }

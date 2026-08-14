@@ -3,8 +3,45 @@
 El 40% de la nota viene de acá. Lo que se evalúa no es cuánta IA usamos, sino
 **si cada uso es apropiado, si sabemos qué le pedimos y qué decidimos nosotros.**
 
-Proveedor: **Google Gemini** (`gemini-2.5-flash`). Una key, tres usos.
-Toda llamada pasa por `src/lib/ai/client.ts` — nadie llama al SDK directo desde una route.
+## Dos proveedores, cada uno donde es fuerte
+
+Huawei nos dio acceso a 5 modelos para la hackathon (GLM-5.2, GLM-5.1, GLM-5,
+DeepSeek-V3.2, Qwen3-32B) vía ModelArts MaaS, API compatible con OpenAI.
+**Los probamos contra la API real: los 5 son solo de texto.** No hay ningún modelo
+con capacidad de imagen bajo este acceso (confirmado con 404 al probar nombres
+de modelos VL conocidos como `glm-4v`, `qwen-vl`, etc.).
+
+Por eso quedó así:
+
+| Uso | Proveedor | Por qué |
+|---|---|---|
+| Visión (foto → especie + peso) | **Gemini** (`GEMINI_API_KEY`) | Es el único de los dos con capacidad de imagen |
+| RAG de precios (el núcleo) | **Huawei MaaS** (`MAAS_API_KEY`, DeepSeek-V3.2) | Dado por los organizadores, y es justo el uso de texto |
+
+Esto es un argumento a favor para el pitch, no una debilidad: evaluamos qué modelo
+sirve para cada tarea en vez de forzar todo a un solo proveedor.
+
+### Hallazgo importante: elegir bien DENTRO de los 5 modelos de Huawei
+
+Medimos el tiempo de respuesta de los 5 modelos con la misma llamada trivial:
+
+| Modelo | Tiempo | Uso |
+|---|---|---|
+| GLM-5.2 | ~13 s | ❌ Es un modelo de razonamiento: gasta ~340 tokens "pensando" antes de responder |
+| GLM-5.1 | ~12 s | ❌ Mismo problema |
+| GLM-5 | ~15 s | ❌ Mismo problema, el más lento |
+| **DeepSeek-V3.2** | **~3 s** | ✅ Elegido por defecto (`MODELO_TEXTO` en `client.ts`) |
+| Qwen3-32B | ~6 s | Alternativa si DeepSeek falla |
+
+La familia GLM disponible acá es de razonamiento extendido y no cabe en un timeout
+de demo en vivo. Si se hubiera usado GLM a ciegas, el precio dinámico —el corazón
+del producto— habría tardado 13+ segundos en pantalla frente al jurado. Se descubrió
+probando contra la API real, no asumiendo por el nombre del modelo.
+
+---
+
+Toda llamada pasa por `src/lib/ai/client.ts` — nadie llama a un SDK o hace fetch
+directo desde una route.
 
 ## Reglas transversales
 
@@ -93,15 +130,18 @@ Dos capas, y el orden importa.
 Es una función pura, testeable, y **funciona sin internet**. Si Gemini se cae durante el pitch,
 el feature central sigue en pantalla. Esa fue una decisión de diseño, no un accidente.
 
-### Capa B — RAG que ajusta y explica
+### Capa B — RAG que ajusta y explica (Huawei MaaS · DeepSeek-V3.2)
 
-1. Base de conocimiento en `src/data/knowledge/*.json`: señales de clima, temporada turística
-   de Valparaíso y oferta regional por especie. Estructura real, valores **simulados y rotulados**.
-2. Se embeden los documentos (`text-embedding-004`) y se guarda el vector en JSON.
-   Recuperación por **similitud coseno en memoria** — no necesitamos una vector DB para ~20 docs,
-   y montar una habría sido sobreingeniería.
-3. Consulta: `"{especie}, {horas} horas sin venderse, agosto en Valparaíso"` → top-3 señales.
-4. Al LLM se le pasa: precio base, descuento por regla, señales recuperadas.
+1. Base de conocimiento en `src/data/knowledge/senales-mercado.json`: señales de clima,
+   temporada turística de Valparaíso y oferta regional por especie. Estructura real,
+   valores **simulados y rotulados**, salvo 2 que citan el boletín real de SERNAPESCA.
+2. **Recuperación por keyword-matching**, no por embeddings vectoriales. Decisión de
+   tiempo: con ~10 documentos, una vector DB o coseno con embeddings es sobreingeniería
+   frente al tiempo disponible — matching de palabras sobre título/contenido da resultados
+   igual de buenos y se implementa en minutos. Ver `recuperarSenales()` en `price-rag.ts`.
+3. Se priorizan las señales que mencionan la especie; si no alcanzan, se completa con
+   clima/temporada. Top-3.
+4. Al modelo se le pasa: precio base, descuento por regla, señales recuperadas.
 
 ```
 Eres analista de precios de pesca artesanal en Valparaíso, Chile.
@@ -150,7 +190,7 @@ Guardar esta lista: es la respuesta a la pregunta que más puntaje mueve.
 |---|---|---|
 | Automatizar el portal real de SERNAPESCA con navegador headless | Descartado, mock explícito | Alto riesgo de bloqueo, tiempo de debug impredecible, cero puntos extra de IA |
 | Backend en FastAPI + frontend Next.js | Todo en Next.js | Dos deploys y CORS con 2 devs y 10 horas era plomería sin retorno |
-| Speech-to-text separado + LLM de extracción | Gemini multimodal en una pasada | Una integración menos que puede fallar en vivo |
-| Clasificador de especies abierto | Catálogo cerrado de 3 especies | Un clasificador abierto alucina especies inexistentes en la región |
-| Precio 100% decidido por el LLM | Regla determinista + ajuste acotado a ±15% | El feature central no puede depender de que la API responda durante el pitch |
-| Vector DB para el RAG | Coseno en memoria sobre ~20 docs | Sobreingeniería para el tamaño real del problema |
+| Speech-to-text separado + LLM de extracción | Gemini multimodal en una pasada (voz queda fuera de esta noche por tiempo, ver `docs/09-plan-noche.md`) | Una integración menos que puede fallar en vivo |
+| Un solo proveedor de IA para todo | Gemini para visión + Huawei MaaS (DeepSeek-V3.2) para el RAG de precios | Huawei no ofrece ningún modelo con capacidad de imagen bajo este acceso (confirmado con 404 contra la API real); cada proveedor donde es fuerte |
+| GLM-5.2 como modelo de texto (el "más nuevo" de los 5 de Huawei) | DeepSeek-V3.2 | Medido contra la API real: GLM-5.x son modelos de razonamiento y tardan 11-15s incluso para un JSON trivial. DeepSeek-V3.2 respondió en ~3s |
+| Vector DB para el RAG | Keyword-matching en memoria sobre ~10 docs | Sobreingeniería para el tamaño real del problema y el tiempo disponible |

@@ -1,22 +1,21 @@
+import { chatTexto, parsearJson, MODELO_TEXTO } from "./client";
+import { acotarAjusteIa, tendenciaDe, AJUSTE_IA_MAX_PCT } from "@/lib/pricing";
+import senalesData from "@/data/knowledge/senales-mercado.json";
+import type { SenalMercado, Tendencia } from "@/lib/types";
+
 /**
- * Uso 3 · Precio dinámico con RAG — Capa B.
+ * RAG de precios — CAPA B, el núcleo del producto (docs/06-ia-y-prompts.md, Uso 3).
+ * Proveedor: Huawei ModelArts MaaS (modelo de texto, ver client.ts).
  *
- * Recupera señales de mercado por similitud coseno sobre embeddings en memoria
- * (no necesitamos vector DB para ~20 docs) y le pide al LLM que ajuste ±15%
- * con una justificación explicada.
- *
- * Prompt exacto: docs/06-ia-y-prompts.md
+ * Recuperación: por keyword-matching sobre tipo de señal + especie, NO por
+ * embeddings vectoriales. Decisión de tiempo: con ~10 documentos de contexto,
+ * una vector DB o coseno con embeddings es sobreingeniería — matching de
+ * palabras da resultados igual de buenos y se implementa en minutos, no en horas.
+ * Si sobra tiempo después de lo urgente, se puede mejorar a embeddings sin
+ * tocar el contrato de esta función (docs/05-api-contratos.md no cambia).
  */
-import { getAi, conTimeout, parsearJson, MODELO } from "./client";
-import { acotarAjusteIa, tendenciaDe } from "../pricing";
-import type { Tendencia, SenalMercado } from "../types";
-import type { PrecioResponse } from "../types";
 
-// -- Base de conocimiento cargada desde JSON ----------------------------------
-
-import senalesJson from "../../data/knowledge/senales-mercado.json";
-
-interface SenalRaw {
+interface SenalCruda {
   id: string;
   tipo: string;
   titulo: string;
@@ -26,182 +25,109 @@ interface SenalRaw {
   fuente?: string;
 }
 
-const DOCUMENTOS: SenalRaw[] = (senalesJson as { senales: SenalRaw[] }).senales;
+const SENALES: SenalMercado[] = (senalesData.senales as SenalCruda[]).map((s) => ({
+  id: s.id,
+  tipo: s.tipo as SenalMercado["tipo"],
+  titulo: s.titulo,
+  contenido: s.contenido,
+  fecha: s.fecha,
+  simulada: s.simulada,
+  fuente: s.fuente,
+}));
 
-// -- Embeddings en memoria -----------------------------------------------------
-
-let embeddingsCache: { doc: SenalRaw; vector: number[] }[] | null = null;
-
-async function ensureEmbeddings(): Promise<{ doc: SenalRaw; vector: number[] }[]> {
-  if (embeddingsCache) return embeddingsCache;
-
-  const ai = getAi();
-  const textos = DOCUMENTOS.map((d) => `${d.titulo}. ${d.contenido}`);
-
-  // Generar embeddings en lotes
-  const result = await ai.models.embedContent({
-    model: "text-embedding-004",
-    contents: textos,
+/** Recupera las señales más relevantes para una especie: prioriza las que
+ *  mencionan la especie en el texto, y si no alcanzan, agrega clima/temporada. */
+export function recuperarSenales(especie: string, top = 3): SenalMercado[] {
+  const q = especie.toLowerCase();
+  const puntuadas = SENALES.map((s) => {
+    let score = 0;
+    if (s.titulo.toLowerCase().includes(q)) score += 2;
+    if (s.contenido.toLowerCase().includes(q)) score += 1;
+    if (s.tipo === "clima" || s.tipo === "temporada_turistica") score += 0.5;
+    return { senal: s, score };
   });
 
-  const vectors = result.embeddings?.map((e) => e.values ?? []) ?? [];
-  embeddingsCache = DOCUMENTOS.map((doc, i) => ({ doc, vector: vectors[i] }));
-  return embeddingsCache;
+  puntuadas.sort((a, b) => b.score - a.score);
+  return puntuadas.slice(0, top).map((p) => p.senal);
 }
 
-function similitudCoseno(a: number[], b: number[]): number {
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+interface AjusteCrudo {
+  precio_sugerido: number;
+  tendencia: "alcista" | "bajista" | "estable";
+  justificacion: string;
+  senales_usadas: string[];
 }
 
-async function recuperarSenales(query: string, topK = 3): Promise<SenalRaw[]> {
-  const ai = getAi();
-  const cache = await ensureEmbeddings();
-
-  const queryResult = await ai.models.embedContent({
-    model: "text-embedding-004",
-    contents: [query],
-  });
-  const queryVector = queryResult.embeddings?.[0]?.values ?? [];
-
-  const scored = cache.map(({ doc, vector }) => ({
-    doc,
-    score: similitudCoseno(queryVector, vector),
-  }));
-
-  scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, topK).map((s) => s.doc);
+export interface ResultadoAjusteIa {
+  precioSugeridoKg: number;
+  tendencia: Tendencia;
+  justificacion: string;
+  senalesUsadas: string[];
+  crudo: unknown;
 }
 
-// -- Prompt del LLM -----------------------------------------------------------
-
-function construirPrompt(
-  especie: string,
-  pesoKg: number,
-  horas: number,
-  precioBase: number,
-  descuentoPct: number,
-  precioRegla: number,
-  senales: SenalRaw[],
-): string {
+/**
+ * Pide al modelo de texto un ajuste sobre el precio de la regla base, acotado
+ * a ±AJUSTE_IA_MAX_PCT. Si falla, el caller (route handler) debe capturar el
+ * error y devolver degradado:true con el precio de la regla base — este
+ * módulo NO tiene fallback propio, eso vive en el endpoint (ver CA-10).
+ */
+export async function ajustarPrecioConIa(params: {
+  especie: string;
+  pesoKg: number;
+  horasPublicado: number;
+  precioBaseKg: number;
+  descuentoPct: number;
+  precioReglaKg: number;
+}): Promise<ResultadoAjusteIa> {
+  const senales = recuperarSenales(params.especie);
   const senalesTexto = senales
     .map((s) => `- ${s.titulo}: ${s.contenido}`)
     .join("\n");
 
-  return `Eres analista de precios de pesca artesanal en Valparaíso, Chile.
+  const prompt = `Eres analista de precios de pesca artesanal en Valparaíso, Chile.
 
-Producto: ${especie}, ${pesoKg} kg, publicado hace ${horas} horas.
-Precio base: $${precioBase}/kg
-Descuento por tiempo (regla base ya aplicada): ${descuentoPct}% → $${precioRegla}/kg
+Producto: ${params.especie}, ${params.pesoKg} kg, publicado hace ${params.horasPublicado.toFixed(1)} horas.
+Precio base: $${params.precioBaseKg}/kg
+Descuento por tiempo (regla base ya aplicada): ${params.descuentoPct}% → $${params.precioReglaKg}/kg
 
 Señales de contexto recuperadas:
-${senalesTexto}
+${senalesTexto || "(sin señales relevantes disponibles)"}
 
-Ajusta el precio SOLO si las señales lo justifican, dentro de ±15% del precio de la regla base.
+Ajusta el precio SOLO si las señales lo justifican, dentro de ±${AJUSTE_IA_MAX_PCT}% del precio de la regla base.
 La justificación debe nombrar la señal concreta que usaste. No inventes señales.
 Máximo 20 palabras, en español de Chile, dirigida al pescador.
 
 Responde SOLO este JSON:
 {"precio_sugerido": number, "tendencia": "alcista"|"bajista"|"estable",
  "justificacion": string, "senales_usadas": string[]}`;
-}
 
-// -- API pública ---------------------------------------------------------------
-
-export interface InputRag {
-  especie: string;
-  pesoKg: number;
-  horasPublicado: number;
-  precioInicialKg: number;
-  descuentoPct: number;
-  precioReglaKg: number;
-}
-
-export async function ajustarPrecioConRag(input: InputRag): Promise<PrecioResponse> {
-  const {
-    especie,
-    pesoKg,
-    horasPublicado,
-    precioInicialKg,
-    descuentoPct,
-    precioReglaKg,
-  } = input;
-
-  // 1. Recuperar señales por similitud
-  const query = `${especie}, ${horasPublicado} horas sin venderse, agosto en Valparaíso`;
-  let senales: SenalRaw[];
-  try {
-    senales = await recuperarSenales(query, 3);
-  } catch {
-    // Si los embeddings fallan, usar todas las señales (fallback)
-    senales = DOCUMENTOS.slice(0, 3);
-  }
-
-  // 2. LLM ajusta precio con contexto
-  const prompt = construirPrompt(
-    especie, pesoKg, horasPublicado,
-    precioInicialKg, descuentoPct, precioReglaKg,
-    senales,
+  const { contenido, crudo } = await chatTexto(
+    [
+      { role: "system", content: "Respondes siempre con JSON válido, sin texto adicional." },
+      { role: "user", content: prompt },
+    ],
+    { model: MODELO_TEXTO, maxTokens: 250, temperature: 0.4 },
   );
 
-  try {
-    const ai = getAi();
-    const resultado = await conTimeout(
-      ai.models.generateContent({
-        model: MODELO,
-        contents: [{ text: prompt }],
-        config: {
-          responseMimeType: "application/json",
-          temperature: 0.3,
-        },
-      }),
-    );
+  const cruda = parsearJson<AjusteCrudo>(contenido);
 
-    const parsed = parsearJson<{
-      precio_sugerido: number;
-      tendencia: Tendencia;
-      justificacion: string;
-      senales_usadas: string[];
-    }>(resultado.text ?? "");
+  const { precio, fueAcotado } = acotarAjusteIa(
+    params.precioReglaKg,
+    cruda.precio_sugerido,
+  );
 
-    // 3. Acotar ajuste a ±15% del precio de regla
-    const { precio: precioFinal, fueAcotado } = acotarAjusteIa(
-      precioReglaKg,
-      parsed.precio_sugerido,
-    );
-
-    const tendencia = tendenciaDe(precioReglaKg, precioFinal);
-
-    return {
-      precioAnteriorKg: precioReglaKg,
-      precioActualKg: precioFinal,
-      descuentoPct: Math.round((1 - precioFinal / precioInicialKg) * 100),
-      tendencia,
-      justificacion: fueAcotado
-        ? `${parsed.justificacion} (ajuste limitado a ±15%)`
-        : parsed.justificacion,
-      senalesUsadas: parsed.senales_usadas ?? senales.map((s) => s.titulo),
-      degradado: false,
-    };
-  } catch {
-    // Fallback: solo regla base, sin IA
-    return {
-      precioAnteriorKg: precioReglaKg,
-      precioActualKg: precioReglaKg,
-      descuentoPct,
-      tendencia: "estable" as Tendencia,
-      justificacion: "Precio ajustado por regla base (IA no disponible).",
-      senalesUsadas: [],
-      degradado: true,
-    };
-  }
+  return {
+    precioSugeridoKg: precio,
+    // Si el modelo dijo "alcista" pero el precio quedó igual tras acotar,
+    // la tendencia real la decide el precio final, no lo que dijo el texto.
+    tendencia: fueAcotado
+      ? tendenciaDe(params.precioReglaKg, precio)
+      : cruda.tendencia,
+    justificacion: cruda.justificacion,
+    senalesUsadas: cruda.senales_usadas?.length
+      ? cruda.senales_usadas
+      : senales.map((s) => s.titulo),
+    crudo,
+  };
 }
-
-export { recuperarSenales };

@@ -1,65 +1,78 @@
 import { NextResponse } from "next/server";
-import { apiOk, apiError, type CapturaResponse, type Reconocimiento } from "@/lib/types";
 import { prisma } from "@/lib/db";
+import { apiError, apiOk, type CapturaResponse } from "@/lib/types";
 
 /**
  * POST /api/capturas/manual — dueño: Manuel
- * Fallback sin IA. No es un caso de error: un pescador con mala señal es un caso real.
+ *
+ * Fallback sin IA. No es un caso de error: un pescador con mala señal o una foto
+ * ambigua es un caso de uso real. Se presenta como tal en la UI.
+ * Contrato: docs/05-api-contratos.md
  */
 export async function POST(request: Request) {
+  let body: unknown;
   try {
-    const body = await request.json();
-    const { pescadorId, especie, cantidad, pesoKg, largoCm } = body;
-
-    if (!especie || !pesoKg) {
-      return NextResponse.json(
-        apiError("VALIDACION", "Faltan campos: especie, pesoKg."),
-        { status: 400 },
-      );
-    }
-
-    // Resolver pescador: SIEMPRE usar uno real de la DB (demo)
-    // El frontend puede enviar un ID inválido — lo ignoramos
-    let pid = pescadorId;
-    const pescadorExistente = pid ? await prisma.pescador.findUnique({ where: { id: pid } }) : null;
-    if (!pescadorExistente) {
-      const primero = await prisma.pescador.findFirst();
-      pid = primero?.id;
-    }
-    if (!pid) {
-      return NextResponse.json(apiError("NO_ENCONTRADO", "No hay pescadores registrados."), { status: 404 });
-    }
-
-    const captura = await prisma.captura.create({
-      data: {
-        pescadorId: pid,
-        especieNombre: especie,
-        cantidad: cantidad ?? 1,
-        pesoKg,
-        largoCm: largoCm ?? null,
-        metodo: "manual",
-        confianzaIa: 1,
-        estado: "pendiente",
-      },
+    body = await request.json();
+  } catch {
+    return NextResponse.json(apiError("VALIDACION", "Body inválido, se esperaba JSON."), {
+      status: 400,
     });
+  }
 
-    const reconocimiento: Reconocimiento = {
-      especie,
+  const { pescadorId, especie, cantidad, pesoKg, largoCm } = (body ?? {}) as Record<
+    string,
+    unknown
+  >;
+
+  if (
+    typeof especie !== "string" ||
+    !especie ||
+    typeof cantidad !== "number" ||
+    cantidad <= 0 ||
+    typeof pesoKg !== "number" ||
+    pesoKg <= 0
+  ) {
+    return NextResponse.json(
+      apiError("VALIDACION", "Se requiere especie, cantidad y pesoKg > 0."),
+      { status: 400 },
+    );
+  }
+
+  // Resolver pescador: SIEMPRE usar uno real de la DB (demo)
+  let pid: string | null = typeof pescadorId === "string" ? pescadorId : null;
+  const pescadorExistente = pid ? await prisma.pescador.findUnique({ where: { id: pid } }) : null;
+  if (!pescadorExistente) {
+    const primero = await prisma.pescador.findFirst();
+    pid = primero?.id ?? null;
+  }
+  if (!pid) {
+    return NextResponse.json(apiError("NO_ENCONTRADO", "No hay pescadores registrados."), { status: 404 });
+  }
+
+  const captura = await prisma.captura.create({
+    data: {
+      pescadorId: pid,
+      especieNombre: especie,
+      cantidad,
+      pesoKg,
+      largoCm: typeof largoCm === "number" ? largoCm : null,
+      metodo: "manual",
+      confianzaIa: 1,
+      estado: "pendiente",
+    },
+  });
+
+  const data: CapturaResponse = {
+    capturaId: captura.id,
+    reconocimiento: {
+      especie: especie as CapturaResponse["reconocimiento"]["especie"],
       confianza: 1,
       pesoKgEstimado: pesoKg,
-      largoCmEstimado: largoCm,
-      cantidad: cantidad ?? 1,
+      largoCmEstimado: typeof largoCm === "number" ? largoCm : undefined,
+      cantidad,
       fuente: "manual",
-    };
+    },
+  };
 
-    const response: CapturaResponse = {
-      capturaId: captura.id,
-      reconocimiento,
-    };
-
-    return NextResponse.json(apiOk(response));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Error desconocido";
-    return NextResponse.json(apiError("INTERNO", message), { status: 500 });
-  }
+  return NextResponse.json(apiOk(data));
 }

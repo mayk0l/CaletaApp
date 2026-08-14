@@ -1,294 +1,52 @@
 "use client";
 
-import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import type { CapturaResponse, ApiResponse } from "@/lib/types";
-import { UMBRAL_CONFIANZA, ESPECIES } from "@/lib/types";
+import { useRef, useState } from "react";
+import { PESCADOR_DEMO } from "@/lib/mocks";
+import { ESPECIES, UMBRAL_CONFIANZA, type ApiResponse, type CapturaResponse } from "@/lib/types";
 
-type Tab = "foto" | "voz" | "manual";
-type Estado = "idle" | "enviando" | "ok" | "error";
+type Pestaña = "foto" | "manual";
 
+/**
+ * Ver docs/07-diseno-ui.md y docs/05-api-contratos.md
+ * Voz queda fuera del alcance de esta noche (docs/09-plan-noche.md): la pestaña
+ * se muestra deshabilitada, no se oculta, para que quede claro que fue una
+ * decisión de alcance y no un olvido.
+ */
 export default function CapturaPage() {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>("voz");
-  const [estado, setEstado] = useState<Estado>("idle");
-  const [error, setError] = useState("");
+  const [tab, setTab] = useState<Pestaña>("foto");
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [resultado, setResultado] = useState<CapturaResponse | null>(null);
-
-  // Voz
-  const [grabando, setGrabando] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-
-  // Foto
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  // Manual
-  const [especieManual, setEspecieManual] = useState<string>("congrio");
-  const [especieOtra, setEspecieOtra] = useState("");
-  const [pesoManual, setPesoManual] = useState("");
-  const [cantidadManual, setCantidadManual] = useState("1");
-
-  // Edición del resultado de IA (el pescador corrige antes de continuar)
-  const [edicion, setEdicion] = useState<{
-    especie: string;
-    especieEsOtra: boolean;
-    especieOtra: string;
-    cantidad: string;
-    pesoKg: string;
-    largoCm: string;
-  } | null>(null);
-  const [guardando, setGuardando] = useState(false);
-
-  const iniciarEdicion = (r: CapturaResponse) => {
-    const esp = r.reconocimiento.especie;
-    const esOtra = !(ESPECIES as readonly string[]).includes(esp) && esp !== "desconocida";
-    setEdicion({
-      especie: esOtra ? "otra" : esp,
-      especieEsOtra: esOtra,
-      especieOtra: esOtra ? esp : "",
-      cantidad: String(r.reconocimiento.cantidad ?? 1),
-      pesoKg: String(r.reconocimiento.pesoKgEstimado ?? ""),
-      largoCm: r.reconocimiento.largoCmEstimado != null ? String(r.reconocimiento.largoCmEstimado) : "",
-    });
-  };
-
-  // -- Captura por voz --
-  const iniciarGrabacion = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-      chunksRef.current = [];
-      recorder.ondataavailable = (e) => chunksRef.current.push(e.data);
-      recorder.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        stream.getTracks().forEach((t) => t.stop());
-        await enviarVoz(blob);
-      };
-      recorder.start();
-      mediaRecorderRef.current = recorder;
-      setGrabando(true);
-    } catch {
-      setError("No se pudo acceder al micrófono. Usa registro manual.");
-      setEstado("error");
-    }
-  };
-
-  const detenerGrabacion = () => {
-    mediaRecorderRef.current?.stop();
-    setGrabando(false);
-  };
-
-  const enviarVoz = async (blob: Blob) => {
-    setEstado("enviando");
-    setError("");
-    try {
-      const form = new FormData();
-      form.append("audio", blob, "grabacion.webm");
-      form.append("pescadorId", "pescador-1");
-      const res = await fetch("/api/capturas/voz", { method: "POST", body: form });
-      const json: ApiResponse<CapturaResponse> = await res.json();
-      if (!json.ok) throw new Error(json.error.message);
-      setResultado(json.data);
-      iniciarEdicion(json.data);
-      setEstado("ok");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Error de conexión");
-      setEstado("error");
-    }
-  };
-
-  // -- Captura por foto --
-  const enviarFoto = async (file: File) => {
-    setEstado("enviando");
-    setError("");
-    try {
-      const form = new FormData();
-      form.append("foto", file);
-      form.append("pescadorId", "pescador-1");
-      const res = await fetch("/api/capturas/imagen", { method: "POST", body: form });
-      const json: ApiResponse<CapturaResponse> = await res.json();
-      if (!json.ok) throw new Error(json.error.message);
-      setResultado(json.data);
-      iniciarEdicion(json.data);
-      setEstado("ok");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Error de conexión");
-      setEstado("error");
-    }
-  };
-
-  // -- Captura manual --
-  const enviarManual = async () => {
-    setEstado("enviando");
-    setError("");
-    try {
-      const res = await fetch("/api/capturas/manual", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pescadorId: "pescador-1",
-          especie: especieManual === "otra" ? especieOtra : especieManual,
-          cantidad: parseInt(cantidadManual),
-          pesoKg: parseFloat(pesoManual),
-        }),
-      });
-      const json: ApiResponse<CapturaResponse> = await res.json();
-      if (!json.ok) throw new Error(json.error.message);
-      setResultado(json.data);
-      iniciarEdicion(json.data);
-      setEstado("ok");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Error de conexión");
-      setEstado("error");
-    }
-  };
-
-  const confirmarYContinuar = async () => {
-    if (!resultado) return;
-    setGuardando(true);
-    setError("");
-    try {
-      const especieFinal = edicion?.especieEsOtra
-        ? edicion.especieOtra
-        : edicion?.especie ?? resultado.reconocimiento.especie;
-      const res = await fetch(`/api/capturas/${resultado.capturaId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          especie: especieFinal,
-          cantidad: parseInt(edicion?.cantidad ?? "1") || 1,
-          pesoKg: parseFloat(edicion?.pesoKg ?? "0") || 0,
-          largoCm: edicion?.largoCm ? parseFloat(edicion.largoCm) : null,
-        }),
-      });
-      const json: ApiResponse<{ capturaId: string }> = await res.json();
-      if (!json.ok) throw new Error(json.error.message);
-      router.push(`/pescador/formulario/${resultado.capturaId}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al guardar");
-    }
-    setGuardando(false);
-  };
-
-  const reiniciar = () => {
+  async function manejarFoto(archivo: File) {
+    setCargando(true);
+    setError(null);
     setResultado(null);
-    setEdicion(null);
-    setEstado("idle");
-    setError("");
-  };
+    try {
+      const form = new FormData();
+      form.append("foto", archivo);
+      form.append("pescadorId", PESCADOR_DEMO.id);
+      const resp = await fetch("/api/capturas/imagen", { method: "POST", body: form });
+      const json: ApiResponse<CapturaResponse> = await resp.json();
+      if (!json.ok) {
+        setError(json.error.message);
+        return;
+      }
+      setResultado(json.data);
+    } catch {
+      setError("No se pudo conectar con el servidor. Probá de nuevo o regístralo manual.");
+    } finally {
+      setCargando(false);
+    }
+  }
 
-  // -- Render --
-  if (resultado && edicion) {
-    const confianzaBaja = resultado.reconocimiento.confianza < UMBRAL_CONFIANZA;
-    return (
-      <div className="mx-auto max-w-lg px-4 py-8">
-        <div className="rounded-3xl bg-white p-6 shadow-lg ring-1 ring-marino/10">
-          <div className="text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-agua/15">
-              <span className="text-3xl">✓</span>
-            </div>
-            <h1 className="text-2xl font-bold">Captura registrada</h1>
-            <p className="mt-1 text-sm text-marino/60">
-              Revisa los datos. Si algo está mal, edítalo.
-            </p>
-          </div>
-
-          <div className="mt-6 space-y-3">
-            <div>
-              <label className="text-sm font-semibold text-marino/70">Especie</label>
-              <select
-                value={edicion.especie}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setEdicion({ ...edicion, especie: v, especieEsOtra: v === "otra" });
-                }}
-                className="mt-1 w-full rounded-xl border border-marino/15 bg-white px-4 py-3 capitalize"
-              >
-                {ESPECIES.map((e) => (
-                  <option key={e} value={e} className="capitalize">{e}</option>
-                ))}
-                <option value="desconocida">desconocida</option>
-                <option value="otra">Otra...</option>
-              </select>
-              {edicion.especieEsOtra && (
-                <input
-                  type="text"
-                  value={edicion.especieOtra}
-                  onChange={(e) => setEdicion({ ...edicion, especieOtra: e.target.value })}
-                  placeholder="Nombre de la especie"
-                  className="mt-2 w-full rounded-xl border border-marino/15 bg-white px-4 py-3"
-                />
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm font-semibold text-marino/70">Cantidad</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={edicion.cantidad}
-                  onChange={(e) => setEdicion({ ...edicion, cantidad: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-marino/15 bg-white px-4 py-3"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-semibold text-marino/70">Peso (kg)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={edicion.pesoKg}
-                  onChange={(e) => setEdicion({ ...edicion, pesoKg: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-marino/15 bg-white px-4 py-3"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-semibold text-marino/70">Largo (cm)</label>
-              <input
-                type="number"
-                step="0.1"
-                value={edicion.largoCm}
-                onChange={(e) => setEdicion({ ...edicion, largoCm: e.target.value })}
-                placeholder="Opcional"
-                className="mt-1 w-full rounded-xl border border-marino/15 bg-white px-4 py-3"
-              />
-            </div>
-            <Dato label="Confianza IA" valor={`${Math.round(resultado.reconocimiento.confianza * 100)}%`} />
-            {resultado.transcripcion && (
-              <Dato label="Transcripción" valor={`"${resultado.transcripcion}"`} />
-            )}
-          </div>
-
-          {confianzaBaja && (
-            <div className="mt-4 rounded-xl bg-cobre/10 p-3 text-sm text-cobre">
-              ⚠️ Confianza baja. Revisa los datos antes de continuar.
-            </div>
-          )}
-
-          {error && (
-            <div className="mt-4 rounded-xl bg-cobre/10 p-3 text-sm text-cobre">{error}</div>
-          )}
-
-          <div className="mt-6 flex gap-3">
-            <button
-              onClick={confirmarYContinuar}
-              disabled={guardando}
-              className="flex-1 rounded-xl bg-agua px-4 py-3 font-semibold text-white transition hover:bg-agua-claro disabled:opacity-50"
-            >
-              {guardando ? "Guardando..." : "Continuar a formulario →"}
-            </button>
-            <button
-              onClick={reiniciar}
-              className="rounded-xl bg-marino/5 px-4 py-3 font-semibold text-marino/70 transition hover:bg-marino/10"
-            >
-              Rehacer
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  function confirmarYContinuar() {
+    if (!resultado) return;
+    router.push(`/pescador/formulario/${resultado.capturaId}`);
   }
 
   return (
@@ -298,172 +56,356 @@ export default function CapturaPage() {
         La IA identifica especie y peso. Tú solo confirmas.
       </p>
 
-      {/* Tabs */}
-      <div className="mt-6 flex gap-2 rounded-xl bg-marino/5 p-1">
-        {( ["voz", "foto", "manual"] as Tab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold capitalize transition ${
-              tab === t ? "bg-white text-marino shadow-sm" : "text-marino/60"
-            }`}
-          >
-            {t === "voz" ? "🎤 Voz" : t === "foto" ? "📸 Foto" : "✍️ Manual"}
-          </button>
-        ))}
+      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+        <TabButton activo={tab === "foto"} onClick={() => setTab("foto")} titulo="Foto" detalle="Sacar una foto" />
+        <TabButton activo={false} disabled titulo="Voz" detalle="Próximamente" />
+        <TabButton
+          activo={tab === "manual"}
+          onClick={() => setTab("manual")}
+          titulo="Manual"
+          detalle="Escribirla"
+        />
       </div>
 
-      <div className="mt-6">
-        {/* VOZ */}
-        {tab === "voz" && (
-          <div className="text-center">
-            {!grabando ? (
-              <button
-                onClick={iniciarGrabacion}
-                disabled={estado === "enviando"}
-                className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-agua text-white shadow-lg transition hover:bg-agua-claro disabled:opacity-50"
-              >
-                <span className="text-3xl">🎤</span>
-              </button>
-            ) : (
-              <button
-                onClick={detenerGrabacion}
-                className="mx-auto flex h-24 w-24 animate-pulse items-center justify-center rounded-full bg-cobre text-white shadow-lg"
-              >
-                <span className="text-2xl">⏹</span>
-              </button>
-            )}
-            <p className="mt-4 text-sm text-marino/70">
-              {grabando ? "Grabando... toca para detener" : estado === "enviando" ? "Procesando..." : "Toca y describe tu captura"}
-            </p>
-            <p className="mt-1 text-xs text-marino/50">
-              {`Ej: "traje dos congrios de tres kilos cada uno"`}
-            </p>
-          </div>
-        )}
-
-        {/* FOTO */}
-        {tab === "foto" && (
-          <div className="text-center">
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) enviarFoto(file);
-              }}
-            />
-            <input
-              ref={galleryInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) enviarFoto(file);
-              }}
-            />
-            <div className="flex justify-center gap-3">
-              <button
-                onClick={() => cameraInputRef.current?.click()}
-                disabled={estado === "enviando"}
-                className="flex h-24 w-24 items-center justify-center rounded-full bg-agua text-white shadow-lg transition hover:bg-agua-claro disabled:opacity-50"
-              >
-                <span className="text-3xl">📷</span>
-              </button>
-              <button
-                onClick={() => galleryInputRef.current?.click()}
-                disabled={estado === "enviando"}
-                className="flex h-24 w-24 items-center justify-center rounded-full bg-marino/10 text-marino shadow-lg transition hover:bg-marino/20 disabled:opacity-50"
-              >
-                <span className="text-3xl">🖼️</span>
-              </button>
-            </div>
-            <p className="mt-4 text-sm text-marino/70">
-              {estado === "enviando" ? "Analizando foto..." : "Toma una foto o elige desde la galería"}
-            </p>
-            <p className="mt-1 text-xs text-marino/50">
-              La IA identifica especie y estima peso automáticamente
-            </p>
-          </div>
-        )}
-
-        {/* MANUAL */}
-        {tab === "manual" && (
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-semibold text-marino/70">Especie</label>
-              <select
-                value={especieManual}
-                onChange={(e) => setEspecieManual(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-marino/15 bg-white px-4 py-3 capitalize"
-              >
-                {ESPECIES.map((e) => (
-                  <option key={e} value={e} className="capitalize">{e}</option>
-                ))}
-                <option value="otra">Otra...</option>
-              </select>
-              {especieManual === "otra" && (
-                <input
-                  type="text"
-                  value={especieOtra}
-                  onChange={(e) => setEspecieOtra(e.target.value)}
-                  placeholder="Nombre de la especie"
-                  className="mt-2 w-full rounded-xl border border-marino/15 bg-white px-4 py-3"
-                />
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm font-semibold text-marino/70">Cantidad</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={cantidadManual}
-                  onChange={(e) => setCantidadManual(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-marino/15 bg-white px-4 py-3"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-semibold text-marino/70">Peso (kg)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={pesoManual}
-                  onChange={(e) => setPesoManual(e.target.value)}
-                  placeholder="3.5"
-                  className="mt-1 w-full rounded-xl border border-marino/15 bg-white px-4 py-3"
-                />
-              </div>
-            </div>
+      {tab === "foto" && (
+        <div className="mt-6">
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const archivo = e.target.files?.[0];
+              if (archivo) manejarFoto(archivo);
+            }}
+          />
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const archivo = e.target.files?.[0];
+              if (archivo) manejarFoto(archivo);
+            }}
+          />
+          <div className="flex gap-3">
             <button
-              onClick={enviarManual}
-              disabled={!pesoManual || (especieManual === "otra" && !especieOtra) || estado === "enviando"}
-              className="w-full rounded-xl bg-agua px-4 py-3 font-semibold text-white transition hover:bg-agua-claro disabled:opacity-50"
+              type="button"
+              onClick={() => cameraInputRef.current?.click()}
+              disabled={cargando}
+              className="flex-1 rounded-2xl bg-agua px-6 py-10 text-center text-lg font-semibold text-marino shadow-sm transition hover:bg-agua-claro disabled:opacity-60"
             >
-              {estado === "enviando" ? "Guardando..." : "Registrar"}
+              {cargando ? "Reconociendo…" : "📷 Tomar foto"}
+            </button>
+            <button
+              type="button"
+              onClick={() => galleryInputRef.current?.click()}
+              disabled={cargando}
+              className="flex-1 rounded-2xl bg-white px-6 py-10 text-center text-lg font-semibold text-marino shadow-sm ring-1 ring-marino/10 transition hover:ring-marino/30 disabled:opacity-60"
+            >
+              🖼️ Galería
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {tab === "manual" && <FormularioManual onListo={setResultado} />}
 
       {error && (
-        <div className="mt-4 rounded-xl bg-cobre/10 p-3 text-sm text-cobre">
+        <p className="mt-4 rounded-xl bg-cobre/10 p-4 text-sm text-cobre" role="alert">
           {error}
-        </div>
+        </p>
+      )}
+
+      {resultado && (
+        <ResultadoReconocimiento
+          resultado={resultado}
+          onConfirmar={confirmarYContinuar}
+        />
       )}
     </div>
   );
 }
 
-function Dato({ label, valor, capitalize }: { label: string; valor: string | number; capitalize?: boolean }) {
+function TabButton({
+  activo,
+  disabled,
+  onClick,
+  titulo,
+  detalle,
+}: {
+  activo: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+  titulo: string;
+  detalle: string;
+}) {
   return (
-    <div className="flex justify-between border-b border-marino/10 pb-2">
-      <span className="text-sm text-marino/60">{label}</span>
-      <span className={`font-semibold ${capitalize ? "capitalize" : ""}`}>{valor}</span>
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`rounded-2xl p-4 text-left ring-1 transition ${
+        activo
+          ? "bg-marino text-white ring-marino"
+          : "bg-white ring-marino/10 hover:ring-marino/30"
+      } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+    >
+      <h2 className="font-semibold">{titulo}</h2>
+      <p className={`mt-1 text-sm ${activo ? "text-white/70" : "text-marino/60"}`}>
+        {detalle}
+      </p>
+    </button>
+  );
+}
+
+function ResultadoReconocimiento({
+  resultado,
+  onConfirmar,
+}: {
+  resultado: CapturaResponse;
+  onConfirmar: () => void;
+}) {
+  const { reconocimiento } = resultado;
+  const confianzaBaja = reconocimiento.confianza < UMBRAL_CONFIANZA;
+  const pct = Math.round(reconocimiento.confianza * 100);
+
+  const espInicial = reconocimiento.especie;
+  const esOtraInicial = !(ESPECIES as readonly string[]).includes(espInicial) && espInicial !== "desconocida";
+
+  const [especie, setEspecie] = useState<string>(esOtraInicial ? "otra" : espInicial);
+  const [especieEsOtra, setEspecieEsOtra] = useState(esOtraInicial);
+  const [especieOtra, setEspecieOtra] = useState(esOtraInicial ? espInicial : "");
+  const [cantidad, setCantidad] = useState(String(reconocimiento.cantidad ?? 1));
+  const [pesoKg, setPesoKg] = useState(String(reconocimiento.pesoKgEstimado ?? ""));
+  const [largoCm, setLargoCm] = useState(
+    reconocimiento.largoCmEstimado != null ? String(reconocimiento.largoCmEstimado) : "",
+  );
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function continuar() {
+    setGuardando(true);
+    setError(null);
+    try {
+      const especieFinal = especieEsOtra ? especieOtra : especie;
+      const res = await fetch(`/api/capturas/${resultado.capturaId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          especie: especieFinal,
+          cantidad: parseInt(cantidad) || 1,
+          pesoKg: parseFloat(pesoKg) || 0,
+          largoCm: largoCm ? parseFloat(largoCm) : null,
+        }),
+      });
+      const json: ApiResponse<{ capturaId: string }> = await res.json();
+      if (!json.ok) throw new Error(json.error.message);
+      onConfirmar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al guardar");
+    }
+    setGuardando(false);
+  }
+
+  return (
+    <div className="mt-6 rounded-2xl bg-white p-5 ring-1 ring-marino/10">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-marino/50">
+        Resultado — revisa y corrige si es necesario
+      </h2>
+
+      <div className="mt-3 space-y-3">
+        <div>
+          <label className="text-sm font-medium text-marino/70">Especie</label>
+          <select
+            value={especie}
+            onChange={(e) => {
+              const v = e.target.value;
+              setEspecie(v);
+              setEspecieEsOtra(v === "otra");
+            }}
+            className="mt-1 w-full rounded-lg border border-marino/20 px-3 py-2 capitalize"
+          >
+            {ESPECIES.map((e) => (
+              <option key={e} value={e} className="capitalize">{e}</option>
+            ))}
+            <option value="desconocida">desconocida</option>
+            <option value="otra">Otra...</option>
+          </select>
+          {especieEsOtra && (
+            <input
+              type="text"
+              value={especieOtra}
+              onChange={(e) => setEspecieOtra(e.target.value)}
+              placeholder="Nombre de la especie"
+              className="mt-2 w-full rounded-lg border border-marino/20 px-3 py-2"
+            />
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-sm font-medium text-marino/70">Cantidad</label>
+            <input
+              type="number"
+              min={1}
+              value={cantidad}
+              onChange={(e) => setCantidad(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-marino/20 px-3 py-2"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-marino/70">Peso (kg)</label>
+            <input
+              type="number"
+              step="0.1"
+              value={pesoKg}
+              onChange={(e) => setPesoKg(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-marino/20 px-3 py-2"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="text-sm font-medium text-marino/70">Largo (cm)</label>
+          <input
+            type="number"
+            step="0.1"
+            value={largoCm}
+            onChange={(e) => setLargoCm(e.target.value)}
+            placeholder="Opcional"
+            className="mt-1 w-full rounded-lg border border-marino/20 px-3 py-2"
+          />
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <div className="h-2 w-full overflow-hidden rounded-full bg-marino/10">
+          <div
+            className={`h-full ${confianzaBaja ? "bg-cobre" : "bg-agua"}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <p className="mt-1 text-xs text-marino/60" aria-live="polite">
+          Confianza de la IA: {pct}%
+          {confianzaBaja ? " — revisa los datos antes de continuar." : ""}
+        </p>
+      </div>
+
+      {reconocimiento.notas && (
+        <p className="mt-2 text-xs text-marino/50">{reconocimiento.notas}</p>
+      )}
+
+      {error && <p className="mt-2 text-sm text-cobre">{error}</p>}
+
+      <button
+        type="button"
+        onClick={continuar}
+        disabled={guardando}
+        className="mt-5 w-full rounded-xl bg-marino px-6 py-3 font-semibold text-white transition hover:bg-marino-claro disabled:opacity-60"
+      >
+        {guardando ? "Guardando…" : "Continuar al formulario"}
+      </button>
+    </div>
+  );
+}
+
+function FormularioManual({
+  onListo,
+}: {
+  onListo: (r: CapturaResponse) => void;
+}) {
+  const [especie, setEspecie] = useState<string>(ESPECIES[0]);
+  const [especieOtra, setEspecieOtra] = useState("");
+  const [cantidad, setCantidad] = useState(1);
+  const [pesoKg, setPesoKg] = useState(1);
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function enviar() {
+    setEnviando(true);
+    setError(null);
+    try {
+      const especieFinal = especie === "otra" ? especieOtra : especie;
+      const resp = await fetch("/api/capturas/manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pescadorId: PESCADOR_DEMO.id, especie: especieFinal, cantidad, pesoKg }),
+      });
+      const json: ApiResponse<CapturaResponse> = await resp.json();
+      if (!json.ok) {
+        setError(json.error.message);
+        return;
+      }
+      onListo(json.data);
+    } catch {
+      setError("No se pudo conectar con el servidor.");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <div className="mt-6 space-y-4 rounded-2xl bg-white p-5 ring-1 ring-marino/10">
+      <label className="block">
+        <span className="text-sm font-medium text-marino/70">Especie</span>
+        <select
+          value={especie}
+          onChange={(e) => setEspecie(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-marino/20 px-3 py-2 capitalize"
+        >
+          {ESPECIES.map((e) => (
+            <option key={e} value={e} className="capitalize">
+              {e}
+            </option>
+          ))}
+          <option value="otra">Otra...</option>
+        </select>
+      </label>
+      {especie === "otra" && (
+        <input
+          type="text"
+          value={especieOtra}
+          onChange={(e) => setEspecieOtra(e.target.value)}
+          placeholder="Nombre de la especie"
+          className="w-full rounded-lg border border-marino/20 px-3 py-2"
+        />
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="text-sm font-medium text-marino/70">Cantidad</span>
+          <input
+            type="number"
+            min={1}
+            value={cantidad}
+            onChange={(e) => setCantidad(Number(e.target.value))}
+            className="mt-1 w-full rounded-lg border border-marino/20 px-3 py-2"
+          />
+        </label>
+        <label className="block">
+          <span className="text-sm font-medium text-marino/70">Peso (kg)</span>
+          <input
+            type="number"
+            min={0.1}
+            step={0.1}
+            value={pesoKg}
+            onChange={(e) => setPesoKg(Number(e.target.value))}
+            className="mt-1 w-full rounded-lg border border-marino/20 px-3 py-2"
+          />
+        </label>
+      </div>
+
+      {error && <p className="text-sm text-cobre">{error}</p>}
+
+      <button
+        type="button"
+        onClick={enviar}
+        disabled={enviando || (especie === "otra" && !especieOtra)}
+        className="w-full rounded-xl bg-marino px-6 py-3 font-semibold text-white transition hover:bg-marino-claro disabled:opacity-60"
+      >
+        {enviando ? "Registrando…" : "Registrar captura"}
+      </button>
     </div>
   );
 }

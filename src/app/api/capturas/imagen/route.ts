@@ -1,51 +1,60 @@
 import { NextResponse } from "next/server";
-import { apiOk, apiError, UMBRAL_CONFIANZA, type CapturaResponse } from "@/lib/types";
 import { prisma } from "@/lib/db";
 import { reconocerEspecieDesdeFoto } from "@/lib/ai/vision";
+import { apiError, apiOk, UMBRAL_CONFIANZA, type CapturaResponse } from "@/lib/types";
 
 /**
- * POST /api/capturas/imagen — dueño: Manuel
- * Contrato: docs/05-api-contratos.md · Prompt: docs/06-ia-y-prompts.md
+ * POST /api/capturas/imagen — visión con Gemini. Ver docs/06-ia-y-prompts.md
+ *
+ * multipart/form-data: foto (File), pescadorId (string)
  */
 export async function POST(request: Request) {
+  let form: FormData;
   try {
-    const formData = await request.formData();
-    const foto = formData.get("foto") as File | null;
-    const pescadorId = formData.get("pescadorId") as string | null;
+    form = await request.formData();
+  } catch {
+    return NextResponse.json(apiError("VALIDACION", "Body inválido, se esperaba multipart/form-data."), {
+      status: 400,
+    });
+  }
 
-    if (!foto) {
-      return NextResponse.json(
-        apiError("VALIDACION", "Falta el archivo de foto."),
-        { status: 400 },
-      );
-    }
+  const foto = form.get("foto");
+  const pescadorId = form.get("pescadorId");
 
-    // Límite de tamaño: 5 MB antes de cargar el binario en memoria
-    const MAX_FOTO_BYTES = 5 * 1024 * 1024;
-    if (foto.size > MAX_FOTO_BYTES) {
-      return NextResponse.json(
-        apiError("VALIDACION", `Foto demasiado grande (máx 5 MB, recibido ${Math.round(foto.size / 1024 / 1024)} MB).`),
-        { status: 413 },
-      );
-    }
+  if (!(foto instanceof File)) {
+    return NextResponse.json(
+      apiError("VALIDACION", "Se requiere 'foto' (archivo)."),
+      { status: 400 },
+    );
+  }
 
-    // Resolver pescador: SIEMPRE usar uno real de la DB (demo)
-    let pid: string | null = pescadorId;
-    const pescadorExistente = pid ? await prisma.pescador.findUnique({ where: { id: pid } }) : null;
-    if (!pescadorExistente) {
-      const primero = await prisma.pescador.findFirst();
-      pid = primero?.id ?? null;
-    }
-    if (!pid) {
-      return NextResponse.json(apiError("NO_ENCONTRADO", "No hay pescadores registrados."), { status: 404 });
-    }
+  // Límite de tamaño: 5 MB antes de cargar el binario en memoria
+  const MAX_FOTO_BYTES = 5 * 1024 * 1024;
+  if (foto.size > MAX_FOTO_BYTES) {
+    return NextResponse.json(
+      apiError("VALIDACION", `Foto demasiado grande (máx 5 MB, recibido ${Math.round(foto.size / 1024 / 1024)} MB).`),
+      { status: 413 },
+    );
+  }
 
-    const bytes = new Uint8Array(await foto.arrayBuffer());
-    const mimeType = foto.type || "image/jpeg";
+  // Resolver pescador: SIEMPRE usar uno real de la DB (demo)
+  let pid: string | null = typeof pescadorId === "string" ? pescadorId : null;
+  const pescadorExistente = pid ? await prisma.pescador.findUnique({ where: { id: pid } }) : null;
+  if (!pescadorExistente) {
+    const primero = await prisma.pescador.findFirst();
+    pid = primero?.id ?? null;
+  }
+  if (!pid) {
+    return NextResponse.json(apiError("NO_ENCONTRADO", "No hay pescadores registrados."), { status: 404 });
+  }
 
-    const reconocimiento = await reconocerEspecieDesdeFoto(bytes, mimeType);
+  try {
+    const bytes = Buffer.from(await foto.arrayBuffer());
+    const { reconocimiento, crudo } = await reconocerEspecieDesdeFoto(
+      bytes,
+      foto.type || "image/jpeg",
+    );
 
-    // Guardar captura con respuesta cruda del modelo
     const captura = await prisma.captura.create({
       data: {
         pescadorId: pid,
@@ -55,27 +64,29 @@ export async function POST(request: Request) {
         largoCm: reconocimiento.largoCmEstimado,
         metodo: "foto",
         confianzaIa: reconocimiento.confianza,
-        iaRaw: { reconocimiento } as any,
+        iaRaw: JSON.parse(JSON.stringify(crudo)),
         estado: "pendiente",
       },
     });
 
-    const response: CapturaResponse = {
-      capturaId: captura.id,
-      reconocimiento,
-    };
+    const data: CapturaResponse = { capturaId: captura.id, reconocimiento };
 
-    // Si confianza baja, lo decimos pero no bloqueamos
     if (reconocimiento.confianza < UMBRAL_CONFIANZA) {
-      return NextResponse.json(
-        apiOk(response),
-      );
+      return NextResponse.json(apiOk(data));
     }
 
-    return NextResponse.json(apiOk(response));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Error desconocido";
-    const code = message.includes("TIMEOUT") ? "IA_TIMEOUT" : "IA_SIN_RESULTADO";
-    return NextResponse.json(apiError(code, message), { status: 503 });
+    return NextResponse.json(apiOk(data));
+  } catch (err) {
+    const mensaje = err instanceof Error ? err.message : String(err);
+    if (mensaje.includes("IA_TIMEOUT")) {
+      return NextResponse.json(
+        apiError("IA_TIMEOUT", "La IA no respondió a tiempo. Probá de nuevo o regístralo manual."),
+        { status: 504 },
+      );
+    }
+    return NextResponse.json(
+      apiError("IA_SIN_RESULTADO", "No se pudo reconocer la captura desde la foto."),
+      { status: 502 },
+    );
   }
 }

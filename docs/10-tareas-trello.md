@@ -39,43 +39,50 @@ landing y `/marketplace` renderizando los 3 tramos. Build y lint verdes. Pushead
 ## Pegar en `Ahora (bloque actual)`
 
 ```
-CA-01 [M][BLOQ] Crear GEMINI_API_KEY y compartirla por canal privado — 10 min
-CA-02 [M][BLOQ] Neon + DATABASE_URL + db push + seed — 25 min
-CA-20 [R][BLOQ] Deploy vacío en Vercel con las 2 env vars — 20 min
-CA-21 [R] CapturaTabs + SubidorFoto contra mocks — 60 min
+CA-01 [M][BLOQ][LISTO] Clave de Gemini (visión) — lista
+CA-02 [M][BLOQ] Crear la base de datos y cargarle los datos de prueba — 25 min
+CA-02b [M][BLOQ][LISTO] Clave de Huawei probada — usar deepseek-v3.2, NO glm
+CA-20 [R][BLOQ] Dejar la app publicada en internet con su link, aunque esté vacía — 20 min
+CA-21 [R] Pantalla para registrar la captura por foto — 60 min
 ```
+
+> ⚠️ Nota para el tablero: probamos las claves de Huawei contra la API real.
+> Los 5 modelos son solo de texto (nada de visión). Y de los 5, GLM-5.2/5.1/5
+> tardan 11-15 segundos por respuesta — inviables para mostrar en vivo.
+> **DeepSeek-V3.2 responde en ~3s y es el que usa el RAG de precios.**
+> La visión sigue siendo con Gemini, como estaba planeado.
 
 ## Pegar en `Siguiente`
 
 ```
-CA-03 [M] client.ts + vision.ts + POST /api/capturas/imagen — 75 min
-CA-04 [M] POST /api/capturas/voz con audio nativo de Gemini — 45 min
-CA-05 [M] POST /api/capturas/manual — 15 min
-CA-06 [M] GET /api/formulario/[id] con advertencias de talla — 40 min
-CA-07 [M] POST /api/formulario/[id]/enviar + publicación automática — 35 min
-CA-08 [M] GET /api/marketplace real con Prisma + pricing — 30 min
-CA-09 [M] Base de conocimiento del RAG + embeddings precalculados — 30 min
-CA-10 [M] POST /api/marketplace/[id]/precio con RAG acotado a ±15% — 60 min
-CA-22 [R] GrabadorVoz con MediaRecorder — 45 min
-CA-23 [R] ConfianzaIA + confirmación manual bajo el umbral 0.6 — 25 min
-CA-24 [R] Formulario editable + advertencias + validar y enviar — 60 min
-CA-25 [R] /marketplace consumiendo el endpoint real — 30 min
-CA-26 [R] /pescador con historial de capturas — 30 min
-CA-27 [R] Pulido responsive + estados vacíos + skeletons — 40 min
-CA-28 [R] Fotos curadas de las 3 especies en public/demo — 20 min
-CA-29 [R] Deploy a producción + prueba en móvil + QR — 20 min
-CA-40 [R+M] Grabar video de respaldo del flujo completo — 45 min
-CA-41 [R+M] Smoke test en producción de los 3 caminos de IA — 15 min
+CA-03 [M] Que la app reconozca qué pescado es y cuánto pesa desde una foto — 75 min
+CA-04 [M] Que entienda al pescador cuando dice su captura en voz alta — 45 min
+CA-05 [M] Dejar la opción de escribir la captura a mano, por si la IA falla — 15 min
+CA-06 [M] Que el formulario de trazabilidad se llene solo con los datos de la captura — 40 min
+CA-07 [M] Que al confirmar el formulario se envíe y el producto quede publicado — 35 min
+CA-08 [M] Que el listado de productos muestre los precios reales de la base de datos — 30 min
+CA-09 [M] Armar la información de contexto que la IA usa para decidir precios — 30 min
+CA-10 [M] Que el precio baje solo y que la IA explique por qué — 60 min
+CA-22 [R] Botón de grabar para que el pescador hable — 45 min
+CA-23 [R] Mostrar qué tan segura está la IA y pedir confirmación si duda — 25 min
+CA-24 [R] Pantalla del formulario: poder corregir los datos y confirmar el envío — 60 min
+CA-25 [R] Conectar el listado de productos con los datos reales — 30 min
+CA-26 [R] Que el pescador vea sus capturas anteriores — 30 min
+CA-27 [R] Que todo se vea bien en un celular de verdad — 40 min
+CA-28 [R] Elegir y probar las fotos de pescado que usaremos en la demo — 20 min
+CA-29 [R] Publicar la versión final y generar el código QR — 20 min
+CA-40 [R+M] Grabar un video del recorrido completo, por si falla el internet — 45 min
+CA-41 [R+M] Probar la app entera en el link público antes de presentar — 15 min
 ```
 
 ## Pegar en `Backlog P1` (solo si vamos adelantados)
 
 ```
-CA-50 [R] /restaurante con filtro por especie y crear pedido — 45 min
-CA-51 [M] POST /api/pedidos + GET /api/pedidos/[id]/match con score — 45 min
-CA-52 [R] Sello Pesca Artesanal Certificada en perfil de restaurante — 15 min
-CA-53 [R] Login mock como selector de pescador — 20 min
-CA-54 [M] Reserva de producto por restaurante — 30 min
+CA-50 [R] Pantalla del restaurante para pedir pescado — 45 min
+CA-51 [M] Que el sistema sugiera qué captura le sirve a cada pedido — 45 min
+CA-52 [R] Mostrar el sello de Pesca Artesanal Certificada — 15 min
+CA-53 [R] Poder elegir con qué pescador se entra a la app — 20 min
+CA-54 [M] Que el restaurante pueda reservar un producto — 30 min
 ```
 
 ## Pegar en `Pitch (Joaquín/Pía)`

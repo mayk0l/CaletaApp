@@ -1,86 +1,80 @@
 import { NextResponse } from "next/server";
-import { apiOk, apiError, type FormularioResponse } from "@/lib/types";
 import { prisma } from "@/lib/db";
-import { TALLA_MINIMA_CM } from "@/lib/mocks";
+import { apiError, apiOk, type FormularioResponse } from "@/lib/types";
 
 /**
- * GET /api/formulario/[id] — dueño: Manuel (id = capturaId)
+ * GET /api/formulario/[id] — dueño: Manuel  (id = capturaId)
  * Contrato: docs/05-api-contratos.md
+ *
+ * `advertencias`: si largoCm < talla mínima legal de la especie, se avisa.
+ * Es trazabilidad con valor real, no solo autocompletado — vale en el pitch.
  */
 export async function GET(
-  request: Request,
+  _request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  try {
-    const { id } = await context.params;
+  const { id: capturaId } = await context.params;
 
-    const captura = await prisma.captura.findUnique({
-      where: { id },
-      include: { pescador: true, formulario: true },
+  const captura = await prisma.captura.findUnique({
+    where: { id: capturaId },
+    include: { pescador: true, formulario: true },
+  });
+
+  if (!captura) {
+    return NextResponse.json(apiError("NO_ENCONTRADO", "Captura no encontrada."), {
+      status: 404,
     });
+  }
 
-    if (!captura) {
-      return NextResponse.json(
-        apiError("NO_ENCONTRADO", "Captura no encontrada."),
-        { status: 404 },
-      );
-    }
+  const especie = await prisma.especie.findUnique({
+    where: { nombre: captura.especieNombre },
+  });
 
-    // Advertencias: talla mínima legal
-    const advertencias: string[] = [];
-    const especie = captura.especieNombre as keyof typeof TALLA_MINIMA_CM;
-    const tallaMin = TALLA_MINIMA_CM[especie];
-    if (tallaMin && captura.largoCm && captura.largoCm < tallaMin) {
-      advertencias.push(
-        `Talla estimada (${captura.largoCm} cm) bajo el mínimo legal (${tallaMin} cm).`,
-      );
-    }
+  const advertencias: string[] = [];
+  if (especie?.tallaMinimaCm && captura.largoCm && captura.largoCm < especie.tallaMinimaCm) {
+    advertencias.push(
+      `Talla estimada (${captura.largoCm} cm) bajo el mínimo legal para ${captura.especieNombre} (${especie.tallaMinimaCm} cm).`,
+    );
+  }
 
-    // Upsert formulario
-    const camposFijos = {
-      pescador: captura.pescador.nombre,
-      rpa: captura.pescador.rpaMock,
-      caleta: captura.pescador.caleta,
-      region: captura.pescador.region,
-      embarcacion: captura.pescador.embarcacion ?? "",
-      fecha: captura.creadaEn.toISOString().split("T")[0],
-    };
+  const camposFijos = {
+    pescador: captura.pescador.nombre,
+    rpa: captura.pescador.rpaMock,
+    caleta: captura.pescador.caleta,
+    region: captura.pescador.region,
+    embarcacion: captura.pescador.embarcacion ?? "—",
+    fecha: captura.creadaEn.toISOString().slice(0, 10),
+  };
 
-    const camposVariables = {
-      especie: captura.especieNombre,
-      cantidad: captura.cantidad,
-      pesoKg: captura.pesoKg,
-      largoCm: captura.largoCm ?? undefined,
-      aparejo: "Espinel",
-      zonaCaptura: "V Región · frente a " + captura.pescador.caleta,
-      horaDesembarque: captura.creadaEn.toISOString().split("T")[1]?.slice(0, 5) ?? "",
-    };
+  const camposVariables = {
+    especie: captura.especieNombre,
+    cantidad: captura.cantidad,
+    pesoKg: captura.pesoKg,
+    largoCm: captura.largoCm ?? undefined,
+    aparejo: captura.especieNombre === "jaiba" ? "Trampa" : "Espinel",
+    zonaCaptura: `${captura.pescador.region} · frente a ${captura.pescador.caleta}`,
+    horaDesembarque: captura.creadaEn.toISOString().slice(11, 16),
+  };
 
-    const formulario = captura.formulario
-      ? await prisma.formulario.update({
-          where: { capturaId: id },
-          data: { camposFijos, camposVariables },
-        })
-      : await prisma.formulario.create({
-          data: {
-            capturaId: id,
-            camposFijos,
-            camposVariables,
-            estadoEnvio: "borrador",
-          },
-        });
-
-    const response: FormularioResponse = {
-      formularioId: formulario.id,
+  // Upsert: si ya existe (por reintento de GET), no duplicar.
+  const formulario = await prisma.formulario.upsert({
+    where: { capturaId },
+    update: { camposFijos, camposVariables },
+    create: {
+      capturaId,
       camposFijos,
       camposVariables,
-      estadoEnvio: formulario.estadoEnvio as FormularioResponse["estadoEnvio"],
-      advertencias,
-    };
+      estadoEnvio: "borrador",
+    },
+  });
 
-    return NextResponse.json(apiOk(response));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Error desconocido";
-    return NextResponse.json(apiError("INTERNO", message), { status: 500 });
-  }
+  const data: FormularioResponse = {
+    formularioId: formulario.id,
+    camposFijos,
+    camposVariables,
+    estadoEnvio: formulario.estadoEnvio as FormularioResponse["estadoEnvio"],
+    advertencias,
+  };
+
+  return NextResponse.json(apiOk(data));
 }
