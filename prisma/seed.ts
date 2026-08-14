@@ -155,6 +155,11 @@ async function main() {
         estado: precio.riesgoMerma ? "merma" : "disponible",
         tendencia: item.tendencia,
         justificacionIa: item.justificacion,
+        // Sin esto, GET /api/marketplace oculta tendencia/justificación hasta
+        // que alguien llame a POST .../precio (ver route.ts: solo confía en un
+        // ajuste con menos de 1h de antigüedad). Con esto, la demo se ve
+        // completa desde el primer segundo sin depender de una llamada extra.
+        ultimoAjuste: new Date(),
       },
     });
   }

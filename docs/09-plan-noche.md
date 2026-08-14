@@ -5,6 +5,20 @@ ensayo (1 h). **Trabajo real disponible: ~6 horas.** Con esto, el alcance se cor
 imprescindible: nada de voz, nada de restaurante, nada de matching. Solo el flujo de foto y
 el precio dinámico — que es lo que efectivamente carga el 40% de IA y el corazón del pitch.
 
+## Base de datos: ya está lista (CA-02 hecho)
+
+Se usó **Neon Claimable Postgres** (`npx neon-new --yes`): da una connection string
+funcional en segundos, sin necesidad de crear cuenta. Ideal para esta noche.
+
+⚠️ **Expira en 72 horas** (17 de agosto). Para la demo de esta noche no importa, pero
+si el equipo quiere seguir usando esta base después del pitch, hay que reclamarla desde
+el link que devuelve el comando antes de esa fecha, o se pierde.
+
+Esquema aplicado (`prisma db push`) y seed corrido. Verificado con el servidor local:
+`GET /api/marketplace` devuelve los 3 productos reales desde Postgres con los 3 tramos
+de descuento (0%, 10%, 25%), y `POST /api/marketplace/[id]/precio` ajustó el precio de
+la jibia con IA real (Huawei MaaS, DeepSeek-V3.2) en 7.1s, dentro del timeout.
+
 ## Cronograma (recortado a 6 horas reales)
 
 | Hora | Rubén | Manuel | Hito |
