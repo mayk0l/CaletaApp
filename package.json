@@ -10,7 +10,9 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "verificar:mercado": "tsx scripts/verificar-mercado.ts",
+    "verificar:precio-ia": "tsx --env-file=.env.local scripts/verificar-precio-ia.ts"
   },
   "dependencies": {
     "@google/genai": "^2.17.1",

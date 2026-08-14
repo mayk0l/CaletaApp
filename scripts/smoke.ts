@@ -139,6 +139,104 @@ async function main() {
   const inexistente = await api("/api/marketplace/no-existe/sugerencia");
   verificar("sugerencia de producto inexistente da 404", inexistente.status === 404);
 
+  console.log("\nPredicción de mercado (modelo estadístico)");
+  {
+    const especie = productos[0]?.especie ?? "congrio";
+    const pred = await api<{
+      precioMercadoActualKg: number;
+      factorDominante: string;
+      simulada: boolean;
+      dias: {
+        precioEsperadoKg: number;
+        bandaInferiorKg: number;
+        bandaSuperiorKg: number;
+        variacionPct: number;
+        contribuciones: { factor: string; efectoPct: number }[];
+      }[];
+      modelo: { r2: number; nObservaciones: number };
+      validacion: { mapePct: number; mapeIngenuoPct: number };
+      evidencia: { id: string; metricas: Record<string, number>; simulada: boolean }[];
+    }>(`/api/precios/prediccion?especie=${encodeURIComponent(especie)}&dias=5`);
+
+    verificar("GET /api/precios/prediccion responde ok", pred.json?.ok === true);
+    if (pred.json?.ok) {
+      const d = pred.json.data;
+      verificar("la predicción cubre el horizonte pedido", d.dias.length === 5, `${d.dias.length} días`);
+      verificar(
+        "cada día trae banda coherente",
+        d.dias.every((x) => x.bandaInferiorKg <= x.precioEsperadoKg && x.precioEsperadoKg <= x.bandaSuperiorKg),
+      );
+      verificar(
+        "cada día trae la descomposición por factor",
+        d.dias.every((x) => x.contribuciones.length > 0),
+      );
+      verificar(
+        "el modelo le gana a la predicción ingenua",
+        d.validacion.mapePct < d.validacion.mapeIngenuoPct,
+        `MAPE ${d.validacion.mapePct}% vs ${d.validacion.mapeIngenuoPct}%`,
+      );
+      verificar("la evidencia va rotulada como simulada", d.evidencia.every((e) => e.simulada));
+      verificar(
+        "la evidencia trae métricas auditables",
+        d.evidencia.every((e) => Object.keys(e.metricas).length > 0),
+      );
+    }
+
+    const sinEspecie = await api("/api/precios/prediccion");
+    verificar("predicción sin especie da 400", sinEspecie.status === 400);
+    const especieMala = await api("/api/precios/prediccion?especie=tiburon");
+    verificar("predicción con especie fuera del catálogo da 404", especieMala.status === 404);
+  }
+
+  console.log("\nPrecio propuesto por IA");
+  if (productos[0]) {
+    const ia = await api<{
+      precioSugeridoKg: number;
+      precioBaseKg: number;
+      decidioIa: boolean;
+      confianza: number;
+      fueAcotado: boolean;
+      justificacion: string;
+      razonamiento: string[];
+      datosUsados: string[];
+      referencias: { porReglas: number; porMercado: number };
+      desvio: { vsReglasPct: number; vsMercadoPct: number };
+      analisis: { mercado: { disponible: boolean } };
+    }>(`/api/marketplace/${productos[0].id}/precio-ia`);
+
+    verificar("GET /api/marketplace/[id]/precio-ia responde ok", ia.json?.ok === true);
+    if (ia.json?.ok) {
+      const d = ia.json.data;
+      // El precio tiene que quedar en el rango defendible aunque decida la IA.
+      verificar(
+        "el precio propuesto queda en el rango 60-115% del base",
+        d.precioSugeridoKg >= d.precioBaseKg * 0.6 - 1 &&
+          d.precioSugeridoKg <= d.precioBaseKg * 1.15 + 1,
+        `$${d.precioSugeridoKg} sobre base $${d.precioBaseKg}`,
+      );
+      verificar("trae justificación mostrable", d.justificacion.length > 15);
+      verificar("expone las dos referencias deterministas", d.referencias.porReglas > 0);
+      verificar(
+        "expone el desvío contra las referencias",
+        Number.isFinite(d.desvio.vsReglasPct) && Number.isFinite(d.desvio.vsMercadoPct),
+      );
+      verificar("el análisis incluye la serie de mercado", d.analisis.mercado.disponible);
+
+      if (d.decidioIa) {
+        verificar("la IA cita al menos un dato", d.datosUsados.length > 0);
+        verificar("la IA expone su razonamiento", d.razonamiento.length > 0);
+        verificar("la confianza queda en [0,1]", d.confianza >= 0 && d.confianza <= 1);
+      } else {
+        // El fallback es parte del diseño: si el modelo no responde, decide el
+        // motor de reglas. Se registra como omitido, no como falla.
+        omitir("decisión de precio por IA", "el modelo no respondió; decidió el motor de reglas");
+      }
+    }
+
+    const iaInexistente = await api("/api/marketplace/no-existe/precio-ia");
+    verificar("precio-ia de producto inexistente da 404", iaInexistente.status === 404);
+  }
+
   console.log("\nFlujo del pescador: captura → formulario → publicado → marketplace");
   const captura = await api<{ capturaId: string }>("/api/capturas/manual", {
     method: "POST",

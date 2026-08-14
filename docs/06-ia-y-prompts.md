@@ -186,44 +186,111 @@ Dos capas, y el orden importa.
 Es una función pura, testeable, y **funciona sin internet**. Si Gemini se cae durante el pitch,
 el feature central sigue en pantalla. Esa fue una decisión de diseño, no un accidente.
 
-### Capa B — RAG que ajusta y explica (Huawei MaaS · DeepSeek-V3.2)
+### Capa B — modelo de mercado: proyecta el precio (`src/lib/market/`, sin IA generativa)
 
-1. Base de conocimiento en `src/data/knowledge/senales-mercado.json`: señales de clima,
-   temporada turística de Valparaíso y oferta regional por especie. Estructura real,
-   valores **simulados y rotulados**, salvo 2 que citan el boletín real de SERNAPESCA.
-2. **Recuperación por keyword-matching**, no por embeddings vectoriales. Decisión de
-   tiempo: con ~10 documentos, una vector DB o coseno con embeddings es sobreingeniería
-   frente al tiempo disponible — matching de palabras sobre título/contenido da resultados
-   igual de buenos y se implementa en minutos. Ver `recuperarSenales()` en `price-rag.ts`.
-3. Se priorizan las señales que mencionan la especie; si no alcanzan, se completa con
-   clima/temporada. Top-3.
-4. Al modelo se le pasa: precio base, descuento por regla, señales recuperadas.
+Esta capa no fija el precio de venta: **proyecta hacia dónde va el mercado**, y su
+salida alimenta tanto la explicación como al motor con IA de la capa D.
+
+**1. Serie de mercado simulada** (`simulador.ts`). Cuatro variables diarias por
+especie: desembarque, oleaje, índice de demanda turística y precio mayorista. No hay
+valores escritos a mano: se generan desde un modelo con componentes separables y
+semilla fija, así que la demo es reproducible. El precio se construye desde los
+regresores, no se sortea, así que la relación oferta/clima/demanda → precio existe
+de verdad en el dato.
+
+**2. Regresión log-lineal** (`forecast.ts`):
 
 ```
-Eres analista de precios de pesca artesanal en Valparaíso, Chile.
-
-Producto: {especie}, {peso} kg, publicado hace {horas} horas.
-Precio base: ${precio_base}/kg
-Descuento por tiempo (regla base ya aplicada): {descuento}% → ${precio_regla}/kg
-
-Señales de contexto recuperadas:
-{senales}
-
-Ajusta el precio SOLO si las señales lo justifican, dentro de ±15% del precio de la regla base.
-La justificación debe nombrar la señal concreta que usaste. No inventes señales.
-Máximo 20 palabras, en español de Chile, dirigida al pescador.
-
-Responde SOLO este JSON:
-{"precio_sugerido": number, "tendencia": "alcista"|"bajista"|"estable",
- "justificacion": string, "senales_usadas": string[]}
+log(precio) = b0 + b1·log(desembarque/media) + b2·(oleaje−media)
+                 + b3·turismo + b4·finDeSemana        + shock AR(1)
 ```
 
-**Por qué el límite de ±15%:** sin él el modelo propone precios absurdos y perdemos control de la
-demo. Es una restricción que pusimos nosotros al ver la salida del modelo — buen material para
-la pregunta "¿qué corrigieron de lo que la IA proponía?".
+Los coeficientes se estiman del dato por mínimos cuadrados. En log porque los
+efectos son multiplicativos y así los coeficientes se leen como elasticidades.
 
-**Fallback:** error o timeout → se devuelve el precio de la regla base con `degradado: true`
-y la UI dice "ajustado por regla base".
+**3. Descomposición exacta del pronóstico.** Es lo que hace auditable el número:
+
+```
+Δlog = (X_futuro − X_hoy)·β  +  (φ^h − 1)·residuo_hoy
+       └─ cambio de fundamentos ─┘   └─── reversión ───┘
+```
+
+El intercepto se cancela, así que cada término es atribuible. Para el congrio el
+16-08 el motor devuelve `+58.7% = oferta +35.9% · clima +6.8% · demanda +1.6% ·
+finDeSemana +4.9% · reversión +2.6%`, y el producto de esos factores reconstruye
+exactamente la variación total. `npm run verificar:mercado` lo comprueba.
+
+**4. Recuperación BM25 con decaimiento por recencia** (`retrieval.ts`) sobre un
+corpus **generado desde la serie** (`corpus.ts`), donde cada documento lleva las
+métricas que lo respaldan. Se pasó de `titulo.includes(especie)` a BM25 porque el
+substring no distingue un documento que menciona la especie una vez de otro que
+habla de ella todo el tiempo, y trataba igual un dato de hoy que uno de hace tres
+semanas — en pescado fresco la recencia es media señal. Sigue sin ser embeddings:
+con decenas de documentos BM25 rinde igual y no cuesta una llamada de red.
+
+Resultados medidos (datos simulados, 13 especies): **MAPE 3.7-7.1% contra 9.4-20.0%
+de la predicción ingenua**, le gana en 13/13 especies, cobertura de banda 76%.
+
+`GET /api/precios/prediccion?especie=congrio&dias=7` expone la proyección día por
+día con banda del 80%, la descomposición por factor, los coeficientes estimados y la
+validación fuera de muestra.
+
+### Capa C — LLM que redacta (Huawei MaaS · DeepSeek-V3.2)
+
+En `POST /api/marketplace/[id]/precio` y en `GET .../sugerencia`, al modelo de
+lenguaje no se le pide un precio: recibe el número ya decidido, la descomposición y
+la evidencia, y su tarea es redactar una frase que cite una cifra concreta. Si se
+cae, queda la justificación de plantilla (`explicadoPorIa: false`) y el número sigue
+en pie.
+
+### Capa D — la IA decide el precio (`src/lib/ai/precio-ia.ts`)
+
+`GET /api/marketplace/[id]/precio-ia` invierte el reparto de las capas anteriores:
+**el número lo propone la IA**, no un motor determinista. Es el uso que la hackathon
+pide de una IA — que analice datos y genere la propuesta— y merece ser explícito
+sobre cómo se sostiene.
+
+El modelo recibe un expediente con datos calculados, no frases: serie histórica y su
+variación semanal, pronóstico a 3 días de la capa B, elasticidad estimada a la
+oferta, calidad del modelo (R² y MAPE contra el ingenuo, para que sepa cuánto
+creerle), señales vigentes, evidencia recuperada con métricas, vida útil de la
+especie y porcentaje consumido, y las dos referencias deterministas para comparar.
+
+Devuelve precio, confianza propia, razonamiento paso a paso, los `[id]` de los datos
+que usó y el riesgo que ve.
+
+**Que razona sobre los datos y no copia la referencia** se comprueba con un caso: un
+congrio a 90% de vida útil, con el pronóstico de mercado en +58% para el día
+siguiente, recibe propuesta de **bajar** el precio, y el razonamiento dice "el
+pronóstico alcista es para mañana y pasado, pero el producto no aguantará tanto
+tiempo". Resuelve un conflicto entre dos señales opuestas ponderando la
+perecibilidad. El mismo congrio recién desembarcado recibe lo contrario: subir.
+Un sistema de puntos fijos sumaría y daría el resultado inverso.
+
+**Barreras, porque una IA que decide números necesita red:**
+
+| Barrera | Qué hace |
+|---|---|
+| Rango 60-115% del precio base | Un error del modelo no puede volverse un precio imposible. `fueAcotado` avisa cuando actúa |
+| Fallback determinista | Si el modelo falla o devuelve algo inservible, decide el motor de reglas con `decidioIa: false` |
+| No escribe | Es propuesta, no precio publicado. El pescador decide |
+| Desvío expuesto | Cada respuesta trae cuánto se apartó de las dos referencias |
+| Cita obligatoria | Se le exige nombrar los `[id]` que pesaron |
+
+**El costo honesto:** dos consultas con el mismo insumo dan precios levemente
+distintos (se midió $5500 y $5400 en corridas consecutivas, 2% de diferencia).
+Es inherente a que decida un LLM; se reduce con temperatura 0.2 y no desaparece.
+La contrapartida es el rango acotado y el fallback determinista.
+
+Verificación con llamadas reales: `npm run verificar:precio-ia` recorre cuatro
+escenarios construidos para que la respuesta correcta sea distinta en cada uno, y
+comprueba que la reducción crece con la vida útil consumida, que toda propuesta cita
+datos y que no devuelve el mismo número para todo.
+
+**Por qué el límite de ±15% en la capa C y 60-115% en la capa D:** el modelo puede
+proyectar +58% en un día de marejada y eso es correcto como lectura de mercado, pero
+mover el precio de venta así de golpe no es defendible. Los topes son decisiones de
+producto, no del modelo.
 
 ---
 

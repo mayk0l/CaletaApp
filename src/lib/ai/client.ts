@@ -180,7 +180,15 @@ export interface ChatMensaje {
  */
 export async function chatTexto(
   mensajes: ChatMensaje[],
-  opciones: { model?: string; maxTokens?: number; temperature?: number } = {},
+  opciones: {
+    model?: string;
+    maxTokens?: number;
+    temperature?: number;
+    /** Timeout propio. El default de 12s sirve para redactar una frase, pero una
+     *  llamada analítica con expediente completo y razonamiento necesita más:
+     *  ver src/lib/ai/precio-ia.ts, que pide 30s. */
+    timeoutMs?: number;
+  } = {},
 ): Promise<{ contenido: string; crudo: unknown }> {
   if (!process.env.MAAS_API_KEY) {
     throw new Error("Falta MAAS_API_KEY en el entorno. Ver .env.example");
@@ -202,6 +210,7 @@ export async function chatTexto(
       },
       body: JSON.stringify(body),
     }),
+    opciones.timeoutMs,
   );
 
   if (!respuesta.ok) {

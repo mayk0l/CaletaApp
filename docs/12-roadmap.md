@@ -135,20 +135,31 @@ Mejorar cómo los datos fluyen captura → IA → formulario → marketplace:
 
 ---
 
-## 8. Deuda de entorno (bloqueante para levantar el proyecto)
+## 8. Deuda de entorno (resuelta en el deploy)
 
-- **`DATABASE_URL` vs `schema.prisma`:** el schema declara `postgresql` y el entorno local
-  traía `file:./caleta.db` (sqlite), así que **todos** los endpoints que tocan la DB
-  respondían 500 (`the URL must start with the protocol postgresql://`). No hay ninguna URL
-  de Neon en el entorno ni Postgres local. Para desarrollo se usó un schema aparte
-  (`prisma/schema.sqlite.prisma`, no versionado) sin tocar el `schema.prisma` de la rama.
-  **Decidir:** o se recupera la URL de Neon, o se asume sqlite para desarrollo y se
-  documenta como tal.
+- ✅ **Base de datos en producción.** Se provisionó **Neon Postgres** con
+  `vercel integration add neon` sobre el proyecto `caleta-app`
+  (`pirlinho1s-projects`). Crea `DATABASE_URL` y ~18 variables más en los tres
+  entornos. Esquema aplicado con `prisma db push` y datos con `npm run seed`.
+- ✅ **El desfase `DATABASE_URL` vs `schema.prisma` desapareció.** El schema siempre
+  declaró `postgresql`; lo que faltaba era la base. Ya no hace falta el schema
+  sqlite de desarrollo, que se eliminó.
+- ✅ **Deploy verificado**: https://caleta-app-ashen.vercel.app — smoke test
+  completo contra producción, 59 ok / 0 fallas, más visión y voz probadas a mano.
+
+### Pendiente del deploy
+
+- **No hay deploy automático al mergear.** El repo es `mayk0l/CaletaApp` y la cuenta
+  de Vercel es `pirlinho1`, así que `vercel git connect` falla por permisos. Hasta
+  que el dueño del repo instale la app de GitHub de Vercel, cada deploy se hace a
+  mano con `vercel --prod` desde el directorio del proyecto.
+- **`vercel env pull` sobreescribe `.env.local`** y se lleva `GEMINI_API_KEY` y
+  `MAAS_API_KEY`. Si se corre, hay que volver a ponerlas.
+- **Directorios sueltos sin versionar:** `backend/` y `frontend/` quedaron en el
+  árbol de trabajo y no están en `.gitignore`. `frontend/.next` genera 1131
+  hallazgos de ESLint si se corre `npm run lint` sin argumentos (el código propio,
+  `npx eslint src prisma scripts`, está limpio). Conviene borrarlos o ignorarlos.
 - **Secretos en el historial de git:** el commit inicial `eebc6ac` incluyó
-  `GEMINI_API_KEY` e `INACAP_API_KEY` reales. La rama que los contenía ya se borró del
-  remoto, pero **eso no los saca de GitHub**: el commit sigue alcanzable por SHA. Hay que
-  **rotar ambas keys**; es el único arreglo real.
-- **Directorios sueltos sin versionar:** `backend/` y `frontend/` quedaron en el árbol de
-  trabajo y no están en `.gitignore`. `frontend/.next` genera 1131 hallazgos de ESLint si
-  se corre `npm run lint` sin argumentos (el código propio, `npx eslint src prisma`, está
-  limpio). Conviene borrarlos o ignorarlos para que el lint del repo sea confiable.
+  `GEMINI_API_KEY` e `INACAP_API_KEY` reales, y siguen alcanzables por SHA. Se
+  decidió no rotarlas porque la de INACAP la emiten los organizadores.
+
