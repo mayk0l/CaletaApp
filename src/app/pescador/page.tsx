@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BadgeSimulado } from "@/components/BadgeSimulado";
+import { MisProductos } from "@/components/MisProductos";
 import { PESCADOR_DEMO } from "@/lib/mocks";
 
 /**
@@ -32,11 +33,9 @@ export default function PescadorPage() {
 
       <section className="mt-10">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-marino/50">
-          Últimas capturas
+          Mis productos
         </h2>
-        <p className="mt-3 rounded-xl bg-white p-4 text-sm text-marino/60 ring-1 ring-marino/10">
-          Aún no hay capturas registradas. {/* TODO(Rubén): historial real */}
-        </p>
+        <MisProductos />
       </section>
     </div>
   );

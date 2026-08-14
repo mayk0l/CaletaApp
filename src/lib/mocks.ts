@@ -23,6 +23,16 @@ export const PRECIO_BASE_KG: Record<Exclude<Especie, "desconocida">, number> = {
   congrio: 12000,
   jaiba: 8000,
   jibia: 3500,
+  corvina: 9000,
+  reineta: 7000,
+  merluza: 6000,
+  lenguado: 8000,
+  jurel: 2500,
+  caballa: 3000,
+  loco: 15000,
+  erizo: 6000,
+  pulpo: 12000,
+  albacora: 8000,
 };
 
 /** Talla mínima legal de referencia. CONFIRMAR con normativa antes del pitch. */
@@ -30,6 +40,16 @@ export const TALLA_MINIMA_CM: Record<Exclude<Especie, "desconocida">, number> = 
   congrio: 60,
   jaiba: 12,
   jibia: 0,
+  corvina: 30,
+  reineta: 25,
+  merluza: 30,
+  lenguado: 25,
+  jurel: 0,
+  caballa: 0,
+  loco: 0,
+  erizo: 0,
+  pulpo: 0,
+  albacora: 0,
 };
 
 export const PESCADOR_DEMO = {

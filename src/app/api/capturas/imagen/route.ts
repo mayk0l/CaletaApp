@@ -21,11 +21,31 @@ export async function POST(request: Request) {
   const foto = form.get("foto");
   const pescadorId = form.get("pescadorId");
 
-  if (!(foto instanceof File) || typeof pescadorId !== "string" || !pescadorId) {
+  if (!(foto instanceof File)) {
     return NextResponse.json(
-      apiError("VALIDACION", "Se requiere 'foto' (archivo) y 'pescadorId'."),
+      apiError("VALIDACION", "Se requiere 'foto' (archivo)."),
       { status: 400 },
     );
+  }
+
+  // Límite de tamaño: 5 MB antes de cargar el binario en memoria
+  const MAX_FOTO_BYTES = 5 * 1024 * 1024;
+  if (foto.size > MAX_FOTO_BYTES) {
+    return NextResponse.json(
+      apiError("VALIDACION", `Foto demasiado grande (máx 5 MB, recibido ${Math.round(foto.size / 1024 / 1024)} MB).`),
+      { status: 413 },
+    );
+  }
+
+  // Resolver pescador: SIEMPRE usar uno real de la DB (demo)
+  let pid: string | null = typeof pescadorId === "string" ? pescadorId : null;
+  const pescadorExistente = pid ? await prisma.pescador.findUnique({ where: { id: pid } }) : null;
+  if (!pescadorExistente) {
+    const primero = await prisma.pescador.findFirst();
+    pid = primero?.id ?? null;
+  }
+  if (!pid) {
+    return NextResponse.json(apiError("NO_ENCONTRADO", "No hay pescadores registrados."), { status: 404 });
   }
 
   try {
@@ -37,7 +57,7 @@ export async function POST(request: Request) {
 
     const captura = await prisma.captura.create({
       data: {
-        pescadorId,
+        pescadorId: pid,
         especieNombre: reconocimiento.especie,
         cantidad: reconocimiento.cantidad,
         pesoKg: reconocimiento.pesoKgEstimado,
@@ -52,9 +72,6 @@ export async function POST(request: Request) {
     const data: CapturaResponse = { capturaId: captura.id, reconocimiento };
 
     if (reconocimiento.confianza < UMBRAL_CONFIANZA) {
-      // No es un error: es baja confianza real. Se devuelve igual con ok:true
-      // para que la UI muestre el resultado y pida confirmación manual
-      // (ver ConfianzaIA en docs/07-diseno-ui.md), en vez de bloquear el flujo.
       return NextResponse.json(apiOk(data));
     }
 
