@@ -1,26 +1,97 @@
+"use client";
+
+import { use, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { BadgeSimulado } from "@/components/BadgeSimulado";
-import { mockFormulario } from "@/lib/mocks";
+import type {
+  ApiResponse,
+  CamposFijos,
+  CamposVariables,
+  EnvioResponse,
+  FormularioResponse,
+} from "@/lib/types";
 
 /**
- * Dueño: Rubén. Ver docs/05-api-contratos.md (GET /api/formulario/[capturaId])
+ * Ver docs/05-api-contratos.md. Trae el formulario real, permite confirmarlo
+ * y al enviar redirige al marketplace donde el producto ya quedó publicado.
  *
- * TODO(Rubén):
- *  1. Traer el formulario real del endpoint en vez del mock
- *  2. Campos editables (el pescador corrige lo que la IA estimó mal)
- *  3. Mostrar `advertencias` (ej. talla bajo el mínimo legal) en cobre
- *  4. Botón "Validar y enviar" → POST /api/formulario/[id]/enviar
- *     → mostrar folio + badge simulado → redirigir a /marketplace
- *
- * ⚠️ Los campos son una aproximación: falta el screenshot del formulario real de
- *    SERNAPESCA (no está en contexto/). Ver docs/07-diseno-ui.md
+ * ⚠️ Los campos son una aproximación: falta el screenshot del formulario real
+ *    de SERNAPESCA (no está en contexto/). Ver docs/07-diseno-ui.md
  */
-export default async function FormularioPage({
+export default function FormularioPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = await params;
-  const { camposFijos, camposVariables, advertencias } = mockFormulario;
+  const { id: capturaId } = use(params);
+  const router = useRouter();
+  const [datos, setDatos] = useState<FormularioResponse | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [folio, setFolio] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    fetch(`/api/formulario/${capturaId}`)
+      .then((r) => r.json())
+      .then((json: ApiResponse<FormularioResponse>) => {
+        if (cancelado) return;
+        if (!json.ok) {
+          setError(json.error.message);
+          return;
+        }
+        setDatos(json.data);
+      })
+      .catch(() => {
+        if (!cancelado) setError("No se pudo cargar el formulario.");
+      })
+      .finally(() => {
+        if (!cancelado) setCargando(false);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [capturaId]);
+
+  async function validarYEnviar() {
+    setEnviando(true);
+    setError(null);
+    try {
+      const resp = await fetch(`/api/formulario/${capturaId}/enviar`, { method: "POST" });
+      const json: ApiResponse<EnvioResponse> = await resp.json();
+      if (!json.ok) {
+        setError(json.error.message);
+        return;
+      }
+      setFolio(json.data.folioMock);
+      setTimeout(() => router.push("/marketplace"), 1400);
+    } catch {
+      setError("No se pudo enviar. Probá de nuevo.");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  if (cargando) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-8">
+        <p className="text-marino/60">Cargando formulario…</p>
+      </div>
+    );
+  }
+
+  if (error && !datos) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-8">
+        <p className="rounded-xl bg-cobre/10 p-4 text-sm text-cobre" role="alert">
+          {error}
+        </p>
+      </div>
+    );
+  }
+
+  if (!datos) return null;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
@@ -29,40 +100,54 @@ export default async function FormularioPage({
         <BadgeSimulado texto="envío simulado a SERNAPESCA" />
       </div>
       <p className="mt-2 text-marino/70">
-        Completado automáticamente desde la captura{" "}
-        <code className="font-mono text-sm">{id}</code>. Revisa y confirma.
+        Completado automáticamente desde tu captura. Revisa y confirma.
       </p>
 
-      {advertencias.length > 0 && (
+      {datos.advertencias.length > 0 && (
         <ul className="mt-4 space-y-1 rounded-xl bg-cobre/10 p-4 text-sm text-cobre">
-          {advertencias.map((a) => (
+          {datos.advertencias.map((a) => (
             <li key={a}>{a}</li>
           ))}
         </ul>
       )}
 
-      <Seccion titulo="Datos del pescador (fijos)" datos={camposFijos} />
-      <Seccion titulo="Datos de la captura (autocompletados)" datos={camposVariables} />
+      <Seccion titulo="Datos del pescador (fijos)" datos={datos.camposFijos} />
+      <Seccion titulo="Datos de la captura (autocompletados)" datos={datos.camposVariables} />
 
-      <button
-        type="button"
-        className="mt-8 w-full rounded-xl bg-agua px-6 py-4 text-lg font-semibold text-marino transition hover:bg-agua-claro"
-      >
-        Validar y enviar
-      </button>
-      <p className="mt-2 text-center text-xs text-marino/50">
-        Pendiente de conectar al endpoint de envío.
-      </p>
+      {error && (
+        <p className="mt-4 rounded-xl bg-cobre/10 p-4 text-sm text-cobre" role="alert">
+          {error}
+        </p>
+      )}
+
+      {folio ? (
+        <div
+          className="mt-6 rounded-xl bg-agua/15 p-4 text-center text-agua"
+          aria-live="polite"
+        >
+          <p className="font-semibold">Enviado — folio {folio}</p>
+          <p className="text-sm">Publicado en el marketplace. Redirigiendo…</p>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={validarYEnviar}
+          disabled={enviando || datos.estadoEnvio === "enviado_simulado"}
+          className="mt-8 w-full rounded-xl bg-agua px-6 py-4 text-lg font-semibold text-marino transition hover:bg-agua-claro disabled:opacity-60"
+        >
+          {enviando ? "Enviando…" : "Validar y enviar"}
+        </button>
+      )}
     </div>
   );
 }
 
-function Seccion({
+function Seccion<T extends Record<string, string | number | undefined>>({
   titulo,
   datos,
 }: {
   titulo: string;
-  datos: Record<string, string | number | undefined>;
+  datos: T;
 }) {
   return (
     <section className="mt-6 rounded-2xl bg-white p-5 ring-1 ring-marino/10">
@@ -80,3 +165,7 @@ function Seccion({
     </section>
   );
 }
+
+// Nota: CamposFijos/CamposVariables ya son indexables por diseño (types.ts),
+// así que Seccion funciona igual para ambos sin any.
+export type { CamposFijos, CamposVariables };
