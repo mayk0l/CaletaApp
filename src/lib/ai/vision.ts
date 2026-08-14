@@ -1,5 +1,5 @@
 import { getGemini, MODELO_VISION, conTimeout, parsearJson } from "./client";
-import type { Reconocimiento } from "@/lib/types";
+import { ESPECIES, type Reconocimiento } from "@/lib/types";
 
 /**
  * Reconocimiento de especie + peso/talla desde una foto. Proveedor: Gemini
@@ -10,7 +10,7 @@ import type { Reconocimiento } from "@/lib/types";
 const PROMPT_VISION = `Eres un asistente de trazabilidad pesquera en la Región de Valparaíso, Chile.
 Analiza la foto de una captura de pesca artesanal.
 
-Identifica la especie SOLO entre: congrio, jaiba, jibia.
+Identifica la especie SOLO entre: ${ESPECIES.join(", ")}.
 Si no corresponde a ninguna, devuelve especie "desconocida" con confianza baja.
 No inventes una especie que no esté en la lista.
 
@@ -31,7 +31,7 @@ interface RespuestaVisionCruda {
   notas: string;
 }
 
-const ESPECIES_VALIDAS = new Set(["congrio", "jaiba", "jibia", "desconocida"]);
+const ESPECIES_VALIDAS = new Set<string>([...ESPECIES, "desconocida"]);
 
 export async function reconocerEspecieDesdeFoto(
   bytes: Buffer,
@@ -62,9 +62,6 @@ export async function reconocerEspecieDesdeFoto(
   const cruda = parsearJson<RespuestaVisionCruda>(texto);
 
   const especie = ESPECIES_VALIDAS.has(cruda.especie) ? cruda.especie : "desconocida";
-  // Si el modelo devuelve una especie fuera del catálogo, no se la damos por
-  // buena: se trata como "desconocida" con confianza 0, para forzar confirmación
-  // manual en la UI (ver UMBRAL_CONFIANZA en src/lib/types.ts).
   const confianza = especie === cruda.especie ? clamp01(cruda.confianza) : 0;
 
   const reconocimiento: Reconocimiento = {

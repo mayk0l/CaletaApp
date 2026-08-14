@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { apiError, apiOk, ESPECIES, type CapturaResponse } from "@/lib/types";
+import { apiError, apiOk, type CapturaResponse } from "@/lib/types";
 
 /**
  * POST /api/capturas/manual — dueño: Manuel
@@ -25,27 +25,33 @@ export async function POST(request: Request) {
   >;
 
   if (
-    typeof pescadorId !== "string" ||
-    !pescadorId ||
     typeof especie !== "string" ||
-    !ESPECIES.includes(especie as (typeof ESPECIES)[number]) ||
+    !especie ||
     typeof cantidad !== "number" ||
     cantidad <= 0 ||
     typeof pesoKg !== "number" ||
     pesoKg <= 0
   ) {
     return NextResponse.json(
-      apiError(
-        "VALIDACION",
-        `Se requiere pescadorId, especie (una de: ${ESPECIES.join(", ")}), cantidad y pesoKg > 0.`,
-      ),
+      apiError("VALIDACION", "Se requiere especie, cantidad y pesoKg > 0."),
       { status: 400 },
     );
   }
 
+  // Resolver pescador: SIEMPRE usar uno real de la DB (demo)
+  let pid: string | null = typeof pescadorId === "string" ? pescadorId : null;
+  const pescadorExistente = pid ? await prisma.pescador.findUnique({ where: { id: pid } }) : null;
+  if (!pescadorExistente) {
+    const primero = await prisma.pescador.findFirst();
+    pid = primero?.id ?? null;
+  }
+  if (!pid) {
+    return NextResponse.json(apiError("NO_ENCONTRADO", "No hay pescadores registrados."), { status: 404 });
+  }
+
   const captura = await prisma.captura.create({
     data: {
-      pescadorId,
+      pescadorId: pid,
       especieNombre: especie,
       cantidad,
       pesoKg,

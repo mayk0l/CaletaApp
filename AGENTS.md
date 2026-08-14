@@ -45,13 +45,16 @@ de SERNAPESCA (mock explícito), y la captura se publica en un marketplace donde
 5. **Nada de `any`.** Nada de secretos fuera de `process.env`.
 6. **Lo simulado se rotula en la UI** (`<BadgeSimulado />`). Es criterio de evaluación.
 7. Todo el texto de interfaz va en **español de Chile**.
-8. Catálogo cerrado de especies: **congrio, jaiba, jibia**. No agregar más sin decidirlo.
+8. Catálogo de especies de la región de Valparaíso: **congrio, jaiba, jibia, corvina,
+   reineta, merluza, lenguado, jurel, caballa, loco, erizo, pulpo, albacora**. Plus opción
+   "otra" con texto libre (baja confianza) para especies no listadas. Fuente: `src/lib/types.ts` (ESPECIES).
 
 ## Fuera de alcance — no proponerlo
 
 Integración real con SERNAPESCA, automatización de navegador contra su portal, pagos,
 logística, autenticación real, backend en Python, vector DB, entrenar modelos propios.
-Todas fueron decisiones evaluadas y descartadas: ver `docs/06-ia-y-prompts.md`.
+Todas fueron decisiones evaluadas y descartadas para el hackathon: ver `docs/06-ia-y-prompts.md`.
+Próximos pasos post-hackathon documentados en `docs/12-roadmap.md`.
 
 ## Cifras: no inventar
 

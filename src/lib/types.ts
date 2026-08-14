@@ -9,7 +9,21 @@
 
 /** Catálogo cerrado a propósito: un clasificador abierto alucina especies
  *  que no existen en la región. Ver docs/06-ia-y-prompts.md */
-export const ESPECIES = ["congrio", "jaiba", "jibia"] as const;
+export const ESPECIES = [
+  "congrio",
+  "jaiba",
+  "jibia",
+  "corvina",
+  "reineta",
+  "merluza",
+  "lenguado",
+  "jurel",
+  "caballa",
+  "loco",
+  "erizo",
+  "pulpo",
+  "albacora",
+] as const;
 export type Especie = (typeof ESPECIES)[number] | "desconocida";
 
 export type MetodoRegistro = "foto" | "voz" | "manual";
