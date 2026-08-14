@@ -41,6 +41,8 @@ export type ApiErrorCode =
   | "VALIDACION"
   | "NO_ENCONTRADO"
   | "IA_TIMEOUT"
+  | "IA_CUOTA"
+  | "IA_SOBRECARGA"
   | "IA_SIN_RESULTADO"
   | "INTERNO";
 

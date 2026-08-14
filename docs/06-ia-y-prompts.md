@@ -38,6 +38,62 @@ de demo en vivo. Si se hubiera usado GLM a ciegas, el precio dinámico —el cor
 del producto— habría tardado 13+ segundos en pantalla frente al jurado. Se descubrió
 probando contra la API real, no asumiendo por el nombre del modelo.
 
+### La credencial de INACAP es la de MaaS
+
+`INACAP_API_KEY` y `MAAS_API_KEY` son **la misma credencial** (endpoint
+`api-ap-southeast-1.modelarts-maas.com`). Mientras `MAAS_API_KEY` no estuvo en el
+entorno, `/api/marketplace/[id]/precio` respondía siempre en modo degradado: el RAG de
+precios, que es el núcleo del producto, no corría nunca. Con la variable puesta pasa a
+`degradado: false` y ajusta con señales reales (medido: 12000 → 13800 CLP/kg en 6.6s).
+
+Los 9 modelos que expone hoy ese endpoint: `deepseek-v3.2` (4.9s, JSON limpio, el
+default), `DeepSeek-V3`, `deepseek-r1-250528`, `glm-5`, `glm-5.1`, `glm-5.2`,
+`qwen3-32b`. Los `deepseek-v4-pro` y `deepseek-v4-flash` aparecen listados pero la key
+los rechaza (`401 rejected by api key model allowlist setting`).
+
+Se volvió a verificar que **ninguno acepta imagen ni audio**, ahora con mensajes
+explícitos de la API: `glm-5.x` responde `unsupported content type: 'image_url'` y
+`qwen3-32b` responde `is not a multimodal model`. Visión y voz solo pueden ir por Gemini.
+
+---
+
+## Cadena de modelos de Gemini, y por qué no es un modelo solo
+
+Visión y voz no llaman a un modelo fijo: recorren una cadena y pasan al siguiente ante
+un error transitorio (503, cuota agotada, timeout). Está en `MODELOS_VISION`
+(`src/lib/ai/client.ts`) y se puede forzar uno solo con `GEMINI_MODEL`.
+
+| Orden | Modelo | Medido contra la API real |
+|---|---|---|
+| 1 | `gemini-3.5-flash` | 503 "high traffic" en 12/12 intentos. Queda primero igual: corta en 1-3s y se usa solo cuando Google libere capacidad |
+| 2 | `gemini-3.6-flash` | 3/3 OK (foto 2.2s, audio 3.8s). Es el que sostiene la demo |
+| 3 | `gemini-3.5-flash-lite` | Foto en 886ms cuando responde, pero se colgó hasta el timeout en 1 de 3 |
+
+Los 2.x quedaron fuera: están deprecados. `gemini-2.0-flash` y `gemini-2.0-flash-lite`
+ya devuelven `NOT_FOUND`, y `gemini-2.5-flash` quedó con **20 requests por día**.
+
+### Hallazgo: el razonamiento por defecto era el bug
+
+Los endpoints de foto y voz devolvían `IA_TIMEOUT` de forma intermitente y parecía un
+problema del SDK. No lo era. `gemini-2.5-flash` razona por defecto y gastaba 1000-1600
+tokens de *thinking* para extraer un JSON de 6 campos:
+
+| Config | Latencia por llamada | Tokens de thinking |
+|---|---|---|
+| Razonamiento por defecto | 9.5s / 9.0s / 36.1s (promedio **18.2s**) | 1608 / 1518 / 1016 |
+| Razonamiento al mínimo | **886ms - 2.1s** | 0 |
+
+Contra el timeout de 12s que había, era una carrera perdida: la mitad de las llamadas
+no llegaba. Extraer campos de una foto no es un problema de varios pasos, así que el
+razonamiento no aportaba nada y se pagaba en latencia.
+
+**Gemini 3.x usa `thinkingLevel`, no `thinkingBudget`.** El `thinkingBudget` es de los
+2.x y en 3.x devuelve `400 INVALID_ARGUMENT`. Hoy se manda
+`thinkingConfig: { thinkingLevel: MINIMAL }` (`RAZONAMIENTO_MINIMO` en `client.ts`).
+
+El timeout quedó en **15s por intento** y no total: con 30s la demo esperaba media
+eternidad a un modelo colgado, y con 12s se cortaban respuestas buenas.
+
 ---
 
 Toda llamada pasa por `src/lib/ai/client.ts` — nadie llama a un SDK o hace fetch
@@ -194,3 +250,6 @@ Guardar esta lista: es la respuesta a la pregunta que más puntaje mueve.
 | Un solo proveedor de IA para todo | Gemini para visión + Huawei MaaS (DeepSeek-V3.2) para el RAG de precios | Huawei no ofrece ningún modelo con capacidad de imagen bajo este acceso (confirmado con 404 contra la API real); cada proveedor donde es fuerte |
 | GLM-5.2 como modelo de texto (el "más nuevo" de los 5 de Huawei) | DeepSeek-V3.2 | Medido contra la API real: GLM-5.x son modelos de razonamiento y tardan 11-15s incluso para un JSON trivial. DeepSeek-V3.2 respondió en ~3s |
 | Vector DB para el RAG | Keyword-matching en memoria sobre ~10 docs | Sobreingeniería para el tamaño real del problema y el tiempo disponible |
+| Un modelo de visión fijo | Cadena `gemini-3.5-flash` → `3.6-flash` → `3.5-flash-lite` con fallback ante error transitorio | Medido: `3.5-flash` da 503 en 12/12 intentos y la cuota gratuita es de 20 req/día **por modelo**. Con un modelo fijo la demo se cae; con la cadena se recupera sola y cada modelo aporta su propio cupo |
+| Dejar el razonamiento del modelo en su default | `thinkingLevel: MINIMAL` | El razonamiento por defecto costaba 1000-1600 tokens y 18.2s promedio para un JSON de 6 campos, contra un timeout de 12s. Al mínimo baja a 886ms-2.1s sin perder calidad |
+| Un solo timeout para todas las llamadas de IA | 12s para texto, 15s **por intento** para multimodal | Foto y audio suben binario en base64 y tienen cola de latencia larga (se midió hasta 48s con el modelo saturado). El timeout único era la causa real de los `IA_TIMEOUT` |
