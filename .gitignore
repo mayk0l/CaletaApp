@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+
+# Env
+.env
+backend/.env
+
+# DB
+*.db
+*.db-journal
+
+# Build
+.next/
+out/
+
+# OS
+.DS_Store
+*.jpeg
+*.jpg
+*.png
+
+# IDE
+.vscode/
+.idea/

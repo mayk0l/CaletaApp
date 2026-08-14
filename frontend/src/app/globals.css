@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ocean-900: #0c4a6e;
+  --ocean-700: #0369a1;
+  --sand-400: #facc15;
+}
+
+body {
+  background: linear-gradient(180deg, #f0f9ff 0%, #ffffff 100%);
+  min-height: 100vh;
+}
+
+/* Sello certificado */
+.sello-badge {
+  background: linear-gradient(135deg, #facc15, #eab308);
+  color: #422006;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Precio bajando animación */
+@keyframes flash-discount {
+  0% { background-color: #fef088; }
+  100% { background-color: transparent; }
+}
+
+.flash-discount {
+  animation: flash-discount 1.5s ease-out;
+}
