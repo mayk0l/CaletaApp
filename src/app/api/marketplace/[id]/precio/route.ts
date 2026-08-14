@@ -1,28 +1,80 @@
 import { NextResponse } from "next/server";
-import { apiError } from "@/lib/types";
+import { prisma } from "@/lib/db";
+import { ajustarPrecioConIa } from "@/lib/ai/price-rag";
+import { calcularPrecioBase } from "@/lib/pricing";
+import { apiError, apiOk, type PrecioResponse } from "@/lib/types";
 
 /**
- * POST /api/marketplace/[id]/precio — dueño: Manuel
- * Contrato: docs/05-api-contratos.md · Lógica: docs/06-ia-y-prompts.md
+ * POST /api/marketplace/[id]/precio — EL FEATURE CENTRAL. Ver docs/06-ia-y-prompts.md
  *
- * EL FEATURE CENTRAL DEL PRODUCTO. Dos capas, en este orden:
- *
- *  A. calcularPrecioBase()  → regla determinista, sin red. NUNCA falla.
- *  B. ajustarConRag()       → recupera señales, pide ajuste al LLM,
- *                             se acota con acotarAjusteIa() a ±15%.
- *
- * Si B falla o da timeout: devolver el resultado de A con degradado: true.
- * Eso NO es un error, es el fallback funcionando, y la UI lo dice
- * ("ajustado por regla base"). Es una decisión de diseño defendible ante el jurado.
+ * Capa A (calcularPrecioBase) nunca falla: es la que sostiene la demo.
+ * Capa B (ajustarPrecioConIa, Huawei MaaS) ajusta ±15% y explica.
+ * Si B falla: se devuelve A con degradado:true. No es un error.
  */
 export async function POST(
-  request: Request,
+  _request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  void request;
-  void context;
-  return NextResponse.json(
-    apiError("INTERNO", "Recálculo de precio aún no implementado."),
-    { status: 501 },
-  );
+  const { id } = await context.params;
+
+  const producto = await prisma.producto.findUnique({
+    where: { id },
+    include: { captura: true },
+  });
+
+  if (!producto) {
+    return NextResponse.json(apiError("NO_ENCONTRADO", "Producto no encontrado."), {
+      status: 404,
+    });
+  }
+
+  const base = calcularPrecioBase(producto.precioInicialKg, producto.publicadoEn);
+
+  let resultado: PrecioResponse;
+
+  try {
+    const ajuste = await ajustarPrecioConIa({
+      especie: producto.captura.especieNombre,
+      pesoKg: producto.captura.pesoKg,
+      horasPublicado: base.horasPublicado,
+      precioBaseKg: producto.precioInicialKg,
+      descuentoPct: base.descuentoPct,
+      precioReglaKg: base.precioActualKg,
+    });
+
+    resultado = {
+      precioAnteriorKg: producto.precioActualKg,
+      precioActualKg: ajuste.precioSugeridoKg,
+      descuentoPct: base.descuentoPct,
+      tendencia: ajuste.tendencia,
+      justificacion: ajuste.justificacion,
+      senalesUsadas: ajuste.senalesUsadas,
+      degradado: false,
+    };
+  } catch {
+    // Fallback: la regla determinista nunca falla. Ver docs/03-arquitectura.md, decisión 4.
+    resultado = {
+      precioAnteriorKg: producto.precioActualKg,
+      precioActualKg: base.precioActualKg,
+      descuentoPct: base.descuentoPct,
+      tendencia: "estable",
+      justificacion: "Precio ajustado por regla base (tiempo sin venta).",
+      senalesUsadas: [],
+      degradado: true,
+    };
+  }
+
+  await prisma.producto.update({
+    where: { id },
+    data: {
+      precioActualKg: resultado.precioActualKg,
+      descuentoPct: resultado.descuentoPct,
+      tendencia: resultado.tendencia,
+      justificacionIa: resultado.justificacion,
+      ultimoAjuste: new Date(),
+      estado: base.riesgoMerma ? "merma" : producto.estado,
+    },
+  });
+
+  return NextResponse.json(apiOk(resultado));
 }

@@ -34,6 +34,10 @@ yarn-error.log*
 .env*
 !.env.example
 
+# Claves sueltas: NUNCA se versionan. Usar .env.local, ver .env.example
+keys.txt
+*keys*.txt
+
 # Contexto: notas internas de estrategia de pitch. El repo es PÚBLICO.
 # El resto de contexto/ sí se versiona (son fuentes públicas de SUBPESCA/SERNAPESCA).
 contexto/02-pitch/

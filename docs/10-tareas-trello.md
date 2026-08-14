@@ -39,11 +39,18 @@ landing y `/marketplace` renderizando los 3 tramos. Build y lint verdes. Pushead
 ## Pegar en `Ahora (bloque actual)`
 
 ```
-CA-01 [M][BLOQ] Conseguir la clave de la IA de Google y pasarla al equipo — 10 min
+CA-01 [M][BLOQ][LISTO] Clave de Gemini (visión) — lista
 CA-02 [M][BLOQ] Crear la base de datos y cargarle los datos de prueba — 25 min
+CA-02b [M][BLOQ][LISTO] Clave de Huawei probada — usar deepseek-v3.2, NO glm
 CA-20 [R][BLOQ] Dejar la app publicada en internet con su link, aunque esté vacía — 20 min
-CA-21 [R] Pantalla para registrar la captura: elegir foto, voz o escribirla — 60 min
+CA-21 [R] Pantalla para registrar la captura por foto — 60 min
 ```
+
+> ⚠️ Nota para el tablero: probamos las claves de Huawei contra la API real.
+> Los 5 modelos son solo de texto (nada de visión). Y de los 5, GLM-5.2/5.1/5
+> tardan 11-15 segundos por respuesta — inviables para mostrar en vivo.
+> **DeepSeek-V3.2 responde en ~3s y es el que usa el RAG de precios.**
+> La visión sigue siendo con Gemini, como estaba planeado.
 
 ## Pegar en `Siguiente`
 
