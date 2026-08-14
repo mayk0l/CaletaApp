@@ -20,11 +20,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // Resolver pescador (demo: usar el primero si no se especifica)
-    let pid = pescadorId;
-    if (!pid) {
+    // Resolver pescador: SIEMPRE usar uno real de la DB (demo)
+    let pid: string | null = pescadorId;
+    const pescadorExistente = pid ? await prisma.pescador.findUnique({ where: { id: pid } }) : null;
+    if (!pescadorExistente) {
       const primero = await prisma.pescador.findFirst();
-      pid = primero?.id;
+      pid = primero?.id ?? null;
     }
     if (!pid) {
       return NextResponse.json(apiError("NO_ENCONTRADO", "No hay pescadores registrados."), { status: 404 });

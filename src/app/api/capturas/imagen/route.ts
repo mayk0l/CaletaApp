@@ -20,11 +20,21 @@ export async function POST(request: Request) {
       );
     }
 
-    // Resolver pescador (demo: usar el primero si no se especifica)
-    let pid = pescadorId;
-    if (!pid) {
+    // Límite de tamaño: 5 MB antes de cargar el binario en memoria
+    const MAX_FOTO_BYTES = 5 * 1024 * 1024;
+    if (foto.size > MAX_FOTO_BYTES) {
+      return NextResponse.json(
+        apiError("VALIDACION", `Foto demasiado grande (máx 5 MB, recibido ${Math.round(foto.size / 1024 / 1024)} MB).`),
+        { status: 413 },
+      );
+    }
+
+    // Resolver pescador: SIEMPRE usar uno real de la DB (demo)
+    let pid: string | null = pescadorId;
+    const pescadorExistente = pid ? await prisma.pescador.findUnique({ where: { id: pid } }) : null;
+    if (!pescadorExistente) {
       const primero = await prisma.pescador.findFirst();
-      pid = primero?.id;
+      pid = primero?.id ?? null;
     }
     if (!pid) {
       return NextResponse.json(apiError("NO_ENCONTRADO", "No hay pescadores registrados."), { status: 404 });

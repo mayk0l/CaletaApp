@@ -18,9 +18,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // Resolver pescador: usar el ID dado o el primero disponible (demo)
+    // Resolver pescador: SIEMPRE usar uno real de la DB (demo)
+    // El frontend puede enviar un ID inválido — lo ignoramos
     let pid = pescadorId;
-    if (!pid) {
+    const pescadorExistente = pid ? await prisma.pescador.findUnique({ where: { id: pid } }) : null;
+    if (!pescadorExistente) {
       const primero = await prisma.pescador.findFirst();
       pid = primero?.id;
     }
