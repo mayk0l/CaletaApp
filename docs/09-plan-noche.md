@@ -1,28 +1,28 @@
 # 09 · Plan de la noche
 
-**Ahora: jueves ~23:00. Pitch: viernes 10:00.** Quedan ~11 horas, no 18.
-El PRD original planificaba 18 h de trabajo: **ese plan no cabe**. Este es el plan que sí cabe,
-con P1 explícitamente sacrificable.
+**Ahora: viernes 00:33. Pitch: 10:00.** Quedan ~9,5 horas, y hay que restar dormir (~2,5 h) y
+ensayo (1 h). **Trabajo real disponible: ~6 horas.** Con esto, el alcance se corta a lo
+imprescindible: nada de voz, nada de restaurante, nada de matching. Solo el flujo de foto y
+el precio dinámico — que es lo que efectivamente carga el 40% de IA y el corazón del pitch.
 
-El scaffolding y la documentación (CA-00) ya están hechos y pusheados, así que el bloque de
-setup arranca directo en las claves.
+## Cronograma (recortado a 6 horas reales)
 
-## Cronograma
-
-| Hora | Rubén (frontend) | Manuel (backend/IA) | Hito conjunto |
+| Hora | Rubén | Manuel | Hito |
 |---|---|---|---|
-| **23:00–23:30** | CA-20 deploy vacío en Vercel + env vars | CA-01 Gemini key · CA-02 Neon + seed | ✅ **URL pública viva + BD con datos** |
-| **23:30–00:45** | CA-21 captura con pestañas y foto | CA-03 visión end-to-end | ✅ Foto → especie + peso en pantalla |
-| **00:45–01:45** | CA-23 confianza · CA-24 formulario | CA-04 voz · CA-06 formulario | ✅ Voz funcionando, formulario lleno |
-| **01:45–02:15** | CA-24 validar y enviar | CA-05 manual · CA-07 enviar + publicar | ✅ **Flujo end-to-end completo** |
-| **02:15–03:30** | CA-25 marketplace real | CA-08 marketplace · CA-09 RAG · CA-10 precio | ✅ **Precio bajando visible = el corazón del pitch** |
-| **03:30–04:00** | CA-26 historial · CA-50 restaurante (P1) | CA-51 matching (P1) | P1 — se corta sin culpa si vamos atrasados |
-| **04:00–04:30** | CA-27 pulido | CA-28 fotos de demo probadas | ✅ **CONGELAR ALCANCE** |
-| **04:30–05:15** | CA-29 deploy final + QR + prueba en móvil | verificar los 3 caminos de IA en producción | ✅ URL pública funcionando |
-| **05:15–06:00** | CA-40 video de respaldo (juntos) | | ✅ Plan B listo |
-| **06:00–08:30** | **Dormir.** En serio | | |
-| **08:30–09:00** | CA-41 smoke test + datos frescos de demo | | ✅ Todo verde |
-| **09:00–10:00** | Ensayo con Joaquín (bloque oficial de la hackathon) | | ✅ 3 min cronometrados |
+| **00:35–01:00** | CA-20 deploy vacío en Vercel | CA-01 Gemini key · CA-02 Neon + seed | ✅ URL pública viva + BD con datos |
+| **01:00–02:15** | CA-21 captura por foto contra mocks | CA-03 visión end-to-end | ✅ Foto → especie + peso en pantalla |
+| **02:15–03:00** | CA-24 formulario editable + enviar | CA-06 formulario · CA-07 enviar y publicar | ✅ **Flujo completo: foto → formulario → publicado** |
+| **03:00–04:15** | CA-25 marketplace real | CA-08 marketplace · CA-10 precio (RAG simplificado o solo regla base) | ✅ **Precio bajando visible = el corazón del pitch** |
+| **04:15–04:45** | CA-28 fotos de demo probadas + pulido rápido | CA-05 manual como fallback | ✅ **CONGELAR ALCANCE** |
+| **04:45–05:15** | CA-29 deploy final + QR + prueba en móvil | verificar visión y precio en producción | ✅ URL pública lista |
+| **05:15–05:45** | CA-40 video de respaldo (juntos) | | ✅ Plan B grabado |
+| **05:45–08:15** | **Dormir.** | | |
+| **08:15–08:45** | CA-41 smoke test en producción | | ✅ Todo verde |
+| **08:45–10:00** | Ensayo con Joaquín | | ✅ 3 min cronometrados |
+
+**Lo que se corta sin discusión, ya:** voz (CA-04, CA-22), restaurante y matching (CA-50 a CA-54),
+historial de capturas (CA-26), sello certificado (CA-52), login (CA-53). Si a las 04:15 sobra
+tiempo, se retoma la voz primero — es lo único de esa lista con peso real en el 40% de IA.
 
 ## Regla de corte por hora
 
@@ -30,9 +30,9 @@ Si a la hora indicada el hito no está, se corta lo de abajo:
 
 | Hora | Si no está listo... | Se corta |
 |---|---|---|
-| 01:45 | flujo foto → formulario | la parte de **voz** (CA-04, CA-22) se muestra como mockup |
-| 03:30 | precio dinámico visible | **todo P1** (CA-50 a CA-54) |
-| 04:30 | cualquier cosa | se congela: solo bugs y deploy |
+| 03:00 | flujo foto → formulario | CA-10 se reduce a solo la regla determinista, sin capa RAG |
+| 04:15 | precio dinámico visible | ya no queda nada más que cortar: es la línea de fondo |
+| 04:45 | cualquier cosa | se congela: solo bugs y deploy |
 
 **Prioridad si hay que elegir una sola cosa:** el **precio dinámico** funcionando y visible.
 Es el corazón del pitch y el diferenciador. Antes que la voz, antes que el restaurante.
