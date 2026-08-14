@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { AyudaFoto } from "@/components/AyudaFoto";
+import { PasosFlujo } from "@/components/PasosFlujo";
 import { PESCADOR_DEMO } from "@/lib/mocks";
 import { ESPECIES, UMBRAL_CONFIANZA, type ApiResponse, type CapturaResponse } from "@/lib/types";
 
@@ -101,9 +102,12 @@ export default function CapturaPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-8 sm:py-10">
-      <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Registrar captura</h1>
+      <PasosFlujo actual={1} />
+      <h1 className="mt-4 text-2xl font-bold tracking-tight sm:text-3xl">
+        ¿Qué trajiste?
+      </h1>
       <p className="mt-2 text-marino/70">
-        La IA identifica especie y peso. Tú solo confirmas.
+        Dilo en voz alta, sácale una foto o escríbelo. Después revisas y corriges.
       </p>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-3">

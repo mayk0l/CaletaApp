@@ -64,9 +64,9 @@ const PASOS = [
     icono: "✏️",
   },
   {
-    titulo: "Queda publicada y con trazabilidad",
+    titulo: "Queda a la venta al instante",
     detalle:
-      "El formulario se completa solo y tu pesca aparece en el marketplace con su precio.",
+      "Los papeles de SERNAPESCA se llenan solos y tu pesca aparece en el marketplace con su precio.",
     icono: "✅",
   },
 ];

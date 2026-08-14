@@ -29,8 +29,8 @@ export default function PescadorPage() {
       </Link>
 
       <p className="mt-4 text-sm text-marino/60">
-        La trazabilidad se completa sola con los datos de tu captura y tu pesca queda
-        publicada al instante.
+        Los papeles de SERNAPESCA se llenan solos con lo que registraste, y tu pesca queda
+        a la venta al instante.
       </p>
 
       <section className="mt-10">
