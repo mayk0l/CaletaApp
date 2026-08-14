@@ -3,12 +3,12 @@
  * Prompt exacto: docs/06-ia-y-prompts.md
  */
 import { getAi, conTimeout, parsearJson, MODELO } from "./client";
-import type { Reconocimiento } from "../types";
+import { ESPECIES, type Reconocimiento } from "../types";
 
 const PROMPT_VISION = `Eres un asistente de trazabilidad pesquera en la Región de Valparaíso, Chile.
 Analiza la foto de una captura de pesca artesanal.
 
-Identifica la especie SOLO entre: congrio, jaiba, jibia.
+Identifica la especie SOLO entre: ${ESPECIES.join(", ")}.
 Si no corresponde a ninguna, devuelve especie "desconocida" con confianza baja.
 No inventes una especie que no esté en la lista.
 

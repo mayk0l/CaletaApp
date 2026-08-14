@@ -4,7 +4,7 @@
  * Prompt exacto: docs/06-ia-y-prompts.md
  */
 import { getAi, conTimeout, parsearJson, MODELO } from "./client";
-import type { Reconocimiento } from "../types";
+import { ESPECIES, type Reconocimiento } from "../types";
 
 const PROMPT_VOZ = `Escucha el audio de un pescador artesanal chileno describiendo su captura.
 Habla informal, con modismos y nombres locales de especies.
@@ -12,7 +12,7 @@ Habla informal, con modismos y nombres locales de especies.
 1) Transcribe literal.
 2) Extrae los datos de la captura.
 
-Normaliza la especie a: congrio, jaiba, jibia (o "desconocida").
+Normaliza la especie a una de: ${ESPECIES.join(", ")} (o "desconocida" si no corresponde a ninguna).
 Si dice peso total en vez de peso por unidad, calcula el unitario y dilo en "notas".
 Si un dato no se menciona, usa null. No inventes.
 
@@ -63,7 +63,6 @@ export async function transcribirYExtraer(
 
   const cantidad = parsed.cantidad ?? 1;
   const pesoUnitario = parsed.peso_unitario_kg ?? 0;
-  const pesoTotal = parsed.peso_total_kg ?? pesoUnitario * cantidad;
 
   return {
     transcripcion: parsed.transcripcion,
