@@ -5,22 +5,71 @@ import { useRef, useState } from "react";
 import { PESCADOR_DEMO } from "@/lib/mocks";
 import { ESPECIES, UMBRAL_CONFIANZA, type ApiResponse, type CapturaResponse } from "@/lib/types";
 
-type Pestaña = "foto" | "manual";
+type Pestaña = "voz" | "foto" | "manual";
 
 /**
  * Ver docs/07-diseno-ui.md y docs/05-api-contratos.md
- * Voz queda fuera del alcance de esta noche (docs/09-plan-noche.md): la pestaña
- * se muestra deshabilitada, no se oculta, para que quede claro que fue una
- * decisión de alcance y no un olvido.
  */
 export default function CapturaPage() {
   const router = useRouter();
-  const [tab, setTab] = useState<Pestaña>("foto");
+  const [tab, setTab] = useState<Pestaña>("voz");
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultado, setResultado] = useState<CapturaResponse | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+
+  // Voz
+  const [grabando, setGrabando] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+
+  // -- Captura por voz --
+  async function iniciarGrabacion() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      chunksRef.current = [];
+      recorder.ondataavailable = (e) => chunksRef.current.push(e.data);
+      recorder.onstop = async () => {
+        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        stream.getTracks().forEach((t) => t.stop());
+        await enviarVoz(blob);
+      };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setGrabando(true);
+    } catch {
+      setError("No se pudo acceder al micrófono. Usa registro manual.");
+    }
+  }
+
+  function detenerGrabacion() {
+    mediaRecorderRef.current?.stop();
+    setGrabando(false);
+  }
+
+  async function enviarVoz(blob: Blob) {
+    setCargando(true);
+    setError(null);
+    setResultado(null);
+    try {
+      const form = new FormData();
+      form.append("audio", blob, "grabacion.webm");
+      form.append("pescadorId", PESCADOR_DEMO.id);
+      const resp = await fetch("/api/capturas/voz", { method: "POST", body: form });
+      const json: ApiResponse<CapturaResponse> = await resp.json();
+      if (!json.ok) {
+        setError(json.error.message);
+        return;
+      }
+      setResultado(json.data);
+    } catch {
+      setError("No se pudo conectar con el servidor. Probá de nuevo o regístralo manual.");
+    } finally {
+      setCargando(false);
+    }
+  }
 
   async function manejarFoto(archivo: File) {
     setCargando(true);
@@ -58,7 +107,7 @@ export default function CapturaPage() {
 
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         <TabButton activo={tab === "foto"} onClick={() => setTab("foto")} titulo="Foto" detalle="Sacar una foto" />
-        <TabButton activo={false} disabled titulo="Voz" detalle="Próximamente" />
+        <TabButton activo={tab === "voz"} onClick={() => setTab("voz")} titulo="Voz" detalle="Describirla" />
         <TabButton
           activo={tab === "manual"}
           onClick={() => setTab("manual")}
@@ -66,6 +115,35 @@ export default function CapturaPage() {
           detalle="Escribirla"
         />
       </div>
+
+      {tab === "voz" && (
+        <div className="mt-6 text-center">
+          {!grabando ? (
+            <button
+              type="button"
+              onClick={iniciarGrabacion}
+              disabled={cargando}
+              className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-agua text-white shadow-lg transition hover:bg-agua-claro disabled:opacity-50"
+            >
+              <span className="text-3xl">🎤</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={detenerGrabacion}
+              className="mx-auto flex h-24 w-24 animate-pulse items-center justify-center rounded-full bg-cobre text-white shadow-lg"
+            >
+              <span className="text-2xl">⏹</span>
+            </button>
+          )}
+          <p className="mt-4 text-sm text-marino/70">
+            {grabando ? "Grabando... toca para detener" : cargando ? "Procesando..." : "Toca y describe tu captura"}
+          </p>
+          <p className="mt-1 text-xs text-marino/50">
+            {`Ej: "traje dos congrios de tres kilos cada uno"`}
+          </p>
+        </div>
+      )}
 
       {tab === "foto" && (
         <div className="mt-6">
