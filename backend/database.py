@@ -20,7 +20,7 @@ def get_db():
 
 def init_db():
     """Create all tables and seed initial data."""
-    from .models import Base as _  # noqa: F401 — ensure models loaded
+    from models import Base as _  # noqa: F401 — ensure models loaded
     Base.metadata.create_all(bind=engine)
-    from .seed import run_seed
+    from seed import run_seed
     run_seed()
