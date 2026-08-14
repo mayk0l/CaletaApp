@@ -16,7 +16,22 @@ Toda respuesta usa la misma forma. Nada de devolver el objeto pelado.
 { "ok": false, "error": { "code": "IA_TIMEOUT", "message": "texto para mostrar al usuario" } }
 ```
 
-Códigos de error definidos: `VALIDACION`, `NO_ENCONTRADO`, `IA_TIMEOUT`, `IA_SIN_RESULTADO`, `INTERNO`.
+Códigos de error definidos: `VALIDACION`, `NO_ENCONTRADO`, `IA_TIMEOUT`, `IA_CUOTA`,
+`IA_SOBRECARGA`, `IA_SIN_RESULTADO`, `INTERNO`.
+
+Los tres códigos de IA distinguen fallas que se arreglan distinto, porque durante las
+pruebas contra la API real aparecieron las tres y todas se veían iguales en pantalla:
+
+| Código | HTTP | Qué pasó | Qué hacer |
+|---|---|---|---|
+| `IA_TIMEOUT` | 504 | Ningún modelo de la cadena respondió dentro de `TIMEOUT_MULTIMODAL_MS` (15s por intento) | Reintentar o cargar manual |
+| `IA_CUOTA` | 429 | Cuota agotada. El tier gratuito de Gemini limita **por modelo y por día** (se midió un tope de 20 req/día en `gemini-2.5-flash`) | Esperar, o `GEMINI_MODEL` con otro modelo: el cupo es por modelo |
+| `IA_SOBRECARGA` | 503 | El modelo devolvió "currently experiencing high traffic". No es culpa del input ni de la key | Reintentar; la cadena de modelos ya lo intenta sola |
+| `IA_SIN_RESULTADO` | 502 | La IA respondió pero sin JSON usable | Cargar manual |
+
+Antes existía solo `IA_SIN_RESULTADO` para todo lo que no fuera timeout, así que una
+cuota agotada se mostraba como "no se pudo reconocer la captura" y mandaba a revisar
+la foto cuando el problema no tenía nada que ver con la foto.
 
 **Regla de oro para la demo:** ningún endpoint de IA revienta la pantalla. Si la IA falla,
 se responde `ok:false` con código, y el frontend ofrece **el formulario manual** como salida.

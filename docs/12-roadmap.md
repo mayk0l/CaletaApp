@@ -109,3 +109,46 @@ Mejorar cómo los datos fluyen captura → IA → formulario → marketplace:
 
 - ✅ El tab de foto ahora ofrece dos opciones: **tomar foto (cámara)** o **elegir desde
   galería**. Antes solo abría la cámara forzada.
+
+---
+
+## 7. Fiabilidad de la IA (hecho en esta sesión)
+
+- ✅ **`IA_TIMEOUT` intermitente en foto y voz, resuelto.** No era el SDK: el modelo
+  razonaba por defecto y gastaba 1000-1600 tokens de *thinking* para un JSON de 6 campos
+  (promedio 18.2s) contra un timeout de 12s. Detalle y mediciones en
+  `docs/06-ia-y-prompts.md`.
+- ✅ **Cadena de modelos con fallback** ante 503 / cuota agotada / timeout, en vez de un
+  modelo fijo.
+- ✅ **Errores de IA distinguibles**: `IA_CUOTA` (429) e `IA_SOBRECARGA` (503) dejaron de
+  disfrazarse de `IA_SIN_RESULTADO`.
+- ✅ **RAG de precios operativo**: faltaba `MAAS_API_KEY` en el entorno (es la misma
+  credencial que `INACAP_API_KEY`), así que corría siempre en modo degradado.
+
+### Pendiente
+- **Cuota gratuita:** el tier free da ~20 requests/día **por modelo**. Para una demo con
+  público conviene una key con billing o precalentar resultados de ejemplo.
+- **Latencia de voz:** el camino de audio queda en 19-30s cuando los dos primeros modelos
+  de la cadena fallan. Comprimir el audio antes de subirlo (el navegador ya manda
+  webm/opus, 11x más chico que wav) y evaluar `gemini-3.6-flash` como primario si Google
+  no libera capacidad en `3.5-flash`.
+
+---
+
+## 8. Deuda de entorno (bloqueante para levantar el proyecto)
+
+- **`DATABASE_URL` vs `schema.prisma`:** el schema declara `postgresql` y el entorno local
+  traía `file:./caleta.db` (sqlite), así que **todos** los endpoints que tocan la DB
+  respondían 500 (`the URL must start with the protocol postgresql://`). No hay ninguna URL
+  de Neon en el entorno ni Postgres local. Para desarrollo se usó un schema aparte
+  (`prisma/schema.sqlite.prisma`, no versionado) sin tocar el `schema.prisma` de la rama.
+  **Decidir:** o se recupera la URL de Neon, o se asume sqlite para desarrollo y se
+  documenta como tal.
+- **Secretos en el historial de git:** el commit inicial `eebc6ac` incluyó
+  `GEMINI_API_KEY` e `INACAP_API_KEY` reales. La rama que los contenía ya se borró del
+  remoto, pero **eso no los saca de GitHub**: el commit sigue alcanzable por SHA. Hay que
+  **rotar ambas keys**; es el único arreglo real.
+- **Directorios sueltos sin versionar:** `backend/` y `frontend/` quedaron en el árbol de
+  trabajo y no están en `.gitignore`. `frontend/.next` genera 1131 hallazgos de ESLint si
+  se corre `npm run lint` sin argumentos (el código propio, `npx eslint src prisma`, está
+  limpio). Conviene borrarlos o ignorarlos para que el lint del repo sea confiable.

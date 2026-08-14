@@ -9,7 +9,7 @@
 | UI | Tailwind CSS v4 (tokens de marca en `globals.css`) | 4 |
 | Runtime | React | 19.2 |
 | Base de datos | **Postgres serverless (Neon)** vía Prisma con `db push` | — |
-| IA | **Google Gemini** (`@google/genai`): visión, audio y texto con **una sola API key** | `gemini-2.5-flash` |
+| IA | **Google Gemini** (`@google/genai`) para visión y voz + **Huawei MaaS** para el RAG de precios | cadena `gemini-3.5-flash` → `3.6-flash` → `3.5-flash-lite` |
 | Embeddings (RAG) | Gemini `text-embedding-004` + similitud coseno en memoria | — |
 | Deploy | **Vercel** (un solo deploy, un solo dominio) | — |
 | Repo | GitHub `mayk0l/CaletaApp`, monorepo simple (una sola app) | — |

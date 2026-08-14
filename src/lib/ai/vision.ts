@@ -1,4 +1,9 @@
-import { getGemini, MODELO_VISION, conTimeout, parsearJson } from "./client";
+import {
+  getGemini,
+  conCadenaDeModelos,
+  parsearJson,
+  RAZONAMIENTO_MINIMO,
+} from "./client";
 import { ESPECIES, type Reconocimiento } from "@/lib/types";
 
 /**
@@ -40,9 +45,9 @@ export async function reconocerEspecieDesdeFoto(
   const ai = getGemini();
   const base64 = bytes.toString("base64");
 
-  const respuesta = await conTimeout(
+  const respuesta = await conCadenaDeModelos((modelo) =>
     ai.models.generateContent({
-      model: MODELO_VISION,
+      model: modelo,
       contents: [
         {
           role: "user",
@@ -52,7 +57,10 @@ export async function reconocerEspecieDesdeFoto(
           ],
         },
       ],
-      config: { responseMimeType: "application/json" },
+      config: {
+        responseMimeType: "application/json",
+        thinkingConfig: RAZONAMIENTO_MINIMO,
+      },
     }),
   );
 

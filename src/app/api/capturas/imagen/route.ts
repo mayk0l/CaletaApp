@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { reconocerEspecieDesdeFoto } from "@/lib/ai/vision";
+import { esErrorDeCuota, esErrorDeSobrecarga } from "@/lib/ai/client";
 import { apiError, apiOk, UMBRAL_CONFIANZA, type CapturaResponse } from "@/lib/types";
 
 /**
@@ -82,6 +83,18 @@ export async function POST(request: Request) {
       return NextResponse.json(
         apiError("IA_TIMEOUT", "La IA no respondió a tiempo. Probá de nuevo o regístralo manual."),
         { status: 504 },
+      );
+    }
+    if (esErrorDeCuota(err)) {
+      return NextResponse.json(
+        apiError("IA_CUOTA", "Se agotó la cuota de IA por minuto. Esperá un momento y probá de nuevo."),
+        { status: 429 },
+      );
+    }
+    if (esErrorDeSobrecarga(err)) {
+      return NextResponse.json(
+        apiError("IA_SOBRECARGA", "Los modelos de IA están saturados en este momento. Probá de nuevo o registrá la captura manual."),
+        { status: 503 },
       );
     }
     return NextResponse.json(

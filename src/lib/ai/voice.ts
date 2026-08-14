@@ -1,4 +1,9 @@
-import { getGemini, MODELO_VISION, conTimeout, parsearJson } from "./client";
+import {
+  getGemini,
+  conCadenaDeModelos,
+  parsearJson,
+  RAZONAMIENTO_MINIMO,
+} from "./client";
 import { ESPECIES, type Reconocimiento } from "@/lib/types";
 
 /**
@@ -34,9 +39,9 @@ export async function transcribirYExtraer(
   const ai = getGemini();
   const base64 = Buffer.from(bytes).toString("base64");
 
-  const resultado = await conTimeout(
+  const resultado = await conCadenaDeModelos((modelo) =>
     ai.models.generateContent({
-      model: MODELO_VISION,
+      model: modelo,
       contents: [
         {
           role: "user",
@@ -49,6 +54,7 @@ export async function transcribirYExtraer(
       config: {
         responseMimeType: "application/json",
         temperature: 0.1,
+        thinkingConfig: RAZONAMIENTO_MINIMO,
       },
     }),
   );
