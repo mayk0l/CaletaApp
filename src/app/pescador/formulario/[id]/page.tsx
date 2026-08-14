@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BadgeSimulado } from "@/components/BadgeSimulado";
 import { PageShell, SeccionTitulo } from "@/components/PageShell";
+import { PasosFlujo } from "@/components/PasosFlujo";
 import { Skeleton } from "@/components/Skeleton";
 import type {
   ApiResponse,
@@ -117,9 +118,10 @@ export default function FormularioPage({
 
   return (
     <PageShell
-      titulo="Trazabilidad"
-      descripcion="Completado automáticamente desde tu captura. Revisa y confirma."
+      titulo="Los papeles de tu captura"
+      descripcion="Se llenaron solos con lo que registraste. Revísalos y confirma."
       badge={<BadgeSimulado texto="envío simulado a SERNAPESCA" />}
+      acciones={<PasosFlujo actual={folio ? 3 : 2} />}
     >
       {datos.advertencias.length > 0 && (
         <ul className="space-y-1 rounded-xl bg-cobre/10 p-4 text-sm text-cobre" role="alert">
@@ -129,8 +131,8 @@ export default function FormularioPage({
         </ul>
       )}
 
-      <Seccion titulo="Datos del pescador (fijos)" datos={datos.camposFijos} />
-      <Seccion titulo="Datos de la captura (autocompletados)" datos={datos.camposVariables} />
+      <Seccion titulo="Tus datos" datos={datos.camposFijos} />
+      <Seccion titulo="Lo que trajiste" datos={datos.camposVariables} />
 
       {error && (
         <p className="mt-4 rounded-xl bg-cobre/10 p-4 text-sm text-cobre" role="alert">
@@ -140,21 +142,38 @@ export default function FormularioPage({
 
       {folio ? (
         <div
-          className="mt-6 rounded-xl bg-agua/15 p-4 text-center text-agua"
+          className="mt-6 rounded-2xl bg-agua/15 p-5 text-center"
           aria-live="polite"
         >
-          <p className="font-semibold">Enviado — folio {folio}</p>
-          <p className="text-sm">Publicado en el marketplace. Redirigiendo…</p>
+          <p aria-hidden className="text-3xl">
+            ✅
+          </p>
+          <p className="mt-2 text-lg font-semibold text-marino">
+            Publicaste{" "}
+            <span className="tabular-nums">{datos.camposVariables.pesoKg}</span> kg de{" "}
+            <span className="lowercase">{datos.camposVariables.especie}</span>
+          </p>
+          <p className="mt-1 text-sm text-marino/70">
+            Ya está a la venta en el marketplace. Te llevamos para allá…
+          </p>
+          <p className="mt-3 text-xs text-marino/50">
+            Folio del envío simulado a SERNAPESCA: {folio}
+          </p>
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={validarYEnviar}
-          disabled={enviando || datos.estadoEnvio === "enviado_simulado"}
-          className="mt-8 w-full rounded-xl bg-agua px-6 py-4 text-lg font-semibold text-marino transition hover:bg-agua-claro disabled:opacity-60"
-        >
-          {enviando ? "Enviando…" : "Validar y enviar"}
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={validarYEnviar}
+            disabled={enviando || datos.estadoEnvio === "enviado_simulado"}
+            className="mt-8 w-full rounded-xl bg-agua px-6 py-5 text-lg font-semibold text-marino transition hover:bg-agua-claro disabled:opacity-60"
+          >
+            {enviando ? "Publicando…" : "Confirmar y publicar"}
+          </button>
+          <p className="mt-3 text-center text-sm text-marino/60">
+            Al confirmar, tu pesca queda a la venta y los papeles quedan enviados.
+          </p>
+        </>
       )}
     </PageShell>
   );
