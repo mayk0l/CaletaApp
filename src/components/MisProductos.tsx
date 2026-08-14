@@ -1,107 +1,198 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { EstadoVacio, SkeletonLista } from "@/components/Skeleton";
+import { TarjetaProducto } from "@/components/TarjetaProducto";
 import { formatearPesos } from "@/lib/pricing";
-import type { MarketplaceResponse, ApiResponse } from "@/lib/types";
+import type { ApiResponse, MarketplaceResponse, ProductoPublico } from "@/lib/types";
 
-interface ProductoEdicion {
+/**
+ * Pesca publicada del pescador, con edición del precio base
+ * (PATCH /api/productos/[id], ver docs/05-api-contratos.md).
+ *
+ * ⚠️ El endpoint devuelve todos los productos publicados: hoy hay un solo
+ * pescador (sesión simulada), así que coincide. Cuando exista login hay que
+ * filtrar por pescador en el backend, no acá.
+ */
+interface Edicion {
   precioInput: string;
   guardando: boolean;
-  ok: boolean;
+  guardado: boolean;
   error: string;
 }
 
-export function MisProductos() {
-  const [productos, setProductos] = useState<MarketplaceResponse["productos"]>([]);
-  const [loading, setLoading] = useState(true);
-  const [edicion, setEdicion] = useState<Record<string, ProductoEdicion>>({});
+function edicionInicial(p: ProductoPublico): Edicion {
+  return {
+    precioInput: String(p.precioInicialKg),
+    guardando: false,
+    guardado: false,
+    error: "",
+  };
+}
 
-  useEffect(() => {
-    fetch("/api/marketplace")
-      .then((r) => r.json())
-      .then((json: ApiResponse<MarketplaceResponse>) => {
-        if (json.ok) {
-          setProductos(json.data.productos);
-          const ini: Record<string, ProductoEdicion> = {};
-          for (const p of json.data.productos) {
-            ini[p.id] = { precioInput: String(p.precioInicialKg), guardando: false, ok: false, error: "" };
-          }
-          setEdicion(ini);
+export function MisProductos() {
+  const [productos, setProductos] = useState<ProductoPublico[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [edicion, setEdicion] = useState<Record<string, Edicion>>({});
+
+  const cargar = useCallback(async () => {
+    try {
+      const resp = await fetch("/api/marketplace");
+      const json: ApiResponse<MarketplaceResponse> = await resp.json();
+      if (!json.ok) return;
+
+      setProductos(json.data.productos);
+      setEdicion((previo) => {
+        const siguiente: Record<string, Edicion> = {};
+        for (const p of json.data.productos) {
+          // Conserva lo que el pescador esté escribiendo si ya había una edición.
+          siguiente[p.id] = previo[p.id] ?? edicionInicial(p);
         }
-      })
-      .finally(() => setLoading(false));
+        return siguiente;
+      });
+    } finally {
+      setCargando(false);
+    }
   }, []);
 
-  const guardar = async (id: string) => {
-    const ed = edicion[id];
-    if (!ed) return;
-    setEdicion({ ...edicion, [id]: { ...ed, guardando: true, ok: false, error: "" } });
+  useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  function actualizar(id: string, cambio: Partial<Edicion>) {
+    setEdicion((previo) => {
+      const actual = previo[id];
+      if (!actual) return previo;
+      return { ...previo, [id]: { ...actual, ...cambio } };
+    });
+  }
+
+  async function guardar(producto: ProductoPublico) {
+    const actual = edicion[producto.id];
+    if (!actual) return;
+
+    const precio = Number(actual.precioInput);
+    if (!Number.isFinite(precio) || precio <= 0) {
+      actualizar(producto.id, { error: "Escribe un precio mayor que cero." });
+      return;
+    }
+
+    actualizar(producto.id, { guardando: true, guardado: false, error: "" });
+
     try {
-      const res = await fetch(`/api/productos/${id}`, {
+      const resp = await fetch(`/api/productos/${producto.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ precioInicialKg: parseFloat(ed.precioInput) }),
+        body: JSON.stringify({ precioInicialKg: precio }),
       });
-      const json: ApiResponse<{ productoId: string; precioInicialKg: number }> = await res.json();
+      const json: ApiResponse<{ productoId: string; precioInicialKg: number }> =
+        await resp.json();
       if (!json.ok) throw new Error(json.error.message);
-      setEdicion({ ...edicion, [id]: { ...ed, guardando: false, ok: true, error: "" } });
-      setTimeout(() => {
-        setEdicion((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ok: false } } : prev));
-      }, 2000);
+
+      actualizar(producto.id, { guardando: false, guardado: true });
+      // Recargar deja a la vista el precio con el descuento por horas ya aplicado.
+      await cargar();
+      setTimeout(() => actualizar(producto.id, { guardado: false }), 2500);
     } catch (e) {
-      setEdicion({
-        ...edicion,
-        [id]: { ...ed, guardando: false, ok: false, error: e instanceof Error ? e.message : "Error" },
+      actualizar(producto.id, {
+        guardando: false,
+        error: e instanceof Error ? e.message : "No se pudo guardar.",
       });
     }
-  };
+  }
 
-  if (loading) {
-    return <p className="mt-3 rounded-xl bg-white p-4 text-sm text-marino/60 ring-1 ring-marino/10">Cargando...</p>;
+  if (cargando) {
+    return (
+      <div className="mt-3">
+        <SkeletonLista cantidad={2} etiqueta="Cargando tu pesca publicada…" />
+      </div>
+    );
   }
 
   if (productos.length === 0) {
     return (
-      <p className="mt-3 rounded-xl bg-white p-4 text-sm text-marino/60 ring-1 ring-marino/10">
-        Aún no tienes productos publicados.
-      </p>
+      <div className="mt-3">
+        <EstadoVacio
+          titulo="Aún no tienes pesca publicada"
+          detalle="Registra una captura y valida la trazabilidad: el producto se publica solo."
+          accion={
+            <Link
+              href="/pescador/captura"
+              className="rounded-xl bg-agua px-5 py-3 font-semibold text-marino transition hover:bg-agua-claro"
+            >
+              Registrar captura
+            </Link>
+          }
+        />
+      </div>
     );
   }
 
   return (
-    <ul className="mt-3 space-y-3">
+    <ul className="mt-3 space-y-4">
       {productos.map((p) => {
-        const ed = edicion[p.id];
+        const ed = edicion[p.id] ?? edicionInicial(p);
+        const campoId = `precio-${p.id}`;
+
         return (
-          <li key={p.id} className="rounded-xl bg-white p-4 ring-1 ring-marino/10">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold capitalize">{p.especie}</h3>
-                <p className="text-sm text-marino/60">
-                  {p.pesoKg} kg · venta actual {formatearPesos(p.precioActualKg)}/kg
-                </p>
-              </div>
-              <span className="text-xs text-marino/50">{p.etiquetaTramo}</span>
-            </div>
-            <div className="mt-3 flex items-center gap-2">
-              <label className="text-sm text-marino/60">Precio base $/kg:</label>
-              <input
-                type="number"
-                step="100"
-                value={ed?.precioInput ?? ""}
-                onChange={(e) => setEdicion({ ...edicion, [p.id]: { ...ed!, precioInput: e.target.value } })}
-                className="w-32 rounded-lg border border-marino/15 bg-white px-3 py-2"
-              />
-              <button
-                onClick={() => guardar(p.id)}
-                disabled={ed?.guardando}
-                className="rounded-lg bg-agua px-4 py-2 text-sm font-semibold text-white transition hover:bg-agua-claro disabled:opacity-50"
-              >
-                {ed?.guardando ? "..." : "Guardar"}
-              </button>
-              {ed?.ok && <span className="text-sm text-agua">✓</span>}
-              {ed?.error && <span className="text-sm text-cobre">{ed.error}</span>}
-            </div>
+          <li key={p.id}>
+            <TarjetaProducto
+              producto={p}
+              compacta
+              pie={
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label
+                      htmlFor={campoId}
+                      className="block text-sm font-medium text-marino/70"
+                    >
+                      Precio base por kilo
+                    </label>
+                    <input
+                      id={campoId}
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      step={100}
+                      value={ed.precioInput}
+                      onChange={(e) =>
+                        actualizar(p.id, { precioInput: e.target.value, error: "" })
+                      }
+                      aria-describedby={ed.error ? `${campoId}-error` : undefined}
+                      className="mt-1 w-36 rounded-xl border border-marino/20 bg-white px-3 py-2 tabular-nums focus:border-agua focus:outline-none focus:ring-2 focus:ring-agua/40"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => guardar(p)}
+                    disabled={ed.guardando}
+                    className="rounded-xl bg-agua px-4 py-2 text-sm font-semibold text-marino transition hover:bg-agua-claro disabled:opacity-60"
+                  >
+                    {ed.guardando ? "Guardando…" : "Guardar"}
+                  </button>
+
+                  <p className="text-sm" aria-live="polite">
+                    {ed.guardado && (
+                      <span className="font-medium text-agua">
+                        Guardado · se vende a {formatearPesos(p.precioActualKg)}/kg
+                      </span>
+                    )}
+                  </p>
+
+                  {ed.error && (
+                    <p
+                      id={`${campoId}-error`}
+                      role="alert"
+                      className="text-sm text-cobre"
+                    >
+                      {ed.error}
+                    </p>
+                  )}
+                </div>
+              }
+            />
           </li>
         );
       })}

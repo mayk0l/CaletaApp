@@ -1,5 +1,12 @@
-import Link from "next/link";
+"use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+/**
+ * Header marino con la ruta activa marcada. Saber dónde estás parado es la
+ * diferencia más barata entre un prototipo y una app. Ver docs/07-diseno-ui.md
+ */
 const NAV = [
   { href: "/pescador", label: "Pescador" },
   { href: "/marketplace", label: "Marketplace" },
@@ -7,13 +14,19 @@ const NAV = [
 ];
 
 export function AppHeader() {
+  const pathname = usePathname();
+
   return (
-    <header className="bg-marino text-white">
+    <header className="sticky top-0 z-20 border-b border-white/10 bg-marino text-white">
       <nav
         aria-label="Navegación principal"
         className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3 sm:gap-6"
       >
-        <Link href="/" className="flex items-center gap-2 font-semibold">
+        <Link
+          href="/"
+          className="flex items-center gap-2 font-semibold"
+          aria-label="CaletaApp, ir al inicio"
+        >
           <span
             aria-hidden
             className="grid size-8 place-items-center rounded-full bg-agua text-lg font-bold text-marino"
@@ -23,17 +36,25 @@ export function AppHeader() {
           <span className="hidden sm:inline">CaletaApp</span>
         </Link>
 
-        <ul className="ml-auto flex items-center gap-1 text-sm sm:gap-3">
-          {NAV.map((item) => (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                className="rounded-lg px-3 py-2 hover:bg-marino-claro"
-              >
-                {item.label}
-              </Link>
-            </li>
-          ))}
+        <ul className="ml-auto flex items-center gap-1 text-sm sm:gap-2">
+          {NAV.map((item) => {
+            const activo = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  aria-current={activo ? "page" : undefined}
+                  className={`block rounded-lg px-3 py-2 transition ${
+                    activo
+                      ? "bg-white/15 font-semibold text-white"
+                      : "text-white/80 hover:bg-marino-claro hover:text-white"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       </nav>
     </header>

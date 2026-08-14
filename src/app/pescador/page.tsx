@@ -1,42 +1,42 @@
 import Link from "next/link";
 import { BadgeSimulado } from "@/components/BadgeSimulado";
 import { MisProductos } from "@/components/MisProductos";
+import { OnboardingPescador } from "@/components/OnboardingPescador";
+import { PageShell, SeccionTitulo } from "@/components/PageShell";
 import { PESCADOR_DEMO } from "@/lib/mocks";
 
 /**
- * TODO(Rubén): historial de capturas (P1) + login mock como selector de pescador.
- * Ver docs/07-diseno-ui.md
+ * Home del pescador: un objetivo por pantalla (registrar la captura) más sus
+ * productos publicados. Ver docs/07-diseno-ui.md
  */
 export default function PescadorPage() {
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
-      <div className="flex items-center gap-2">
-        <p className="text-sm text-marino/60">
-          {PESCADOR_DEMO.nombre} · {PESCADOR_DEMO.caleta}
-        </p>
-        <BadgeSimulado texto="sesión simulada" />
-      </div>
-
-      <h1 className="mt-2 text-2xl font-bold sm:text-3xl">¿Qué trajiste hoy?</h1>
+    <PageShell
+      titulo="¿Qué trajiste hoy?"
+      descripcion={`${PESCADOR_DEMO.nombre} · ${PESCADOR_DEMO.caleta} · RPA ${PESCADOR_DEMO.rpaMock}`}
+      badge={<BadgeSimulado texto="sesión simulada" />}
+    >
+      <OnboardingPescador />
 
       <Link
         href="/pescador/captura"
-        className="mt-6 block rounded-2xl bg-agua px-6 py-8 text-center text-xl font-semibold text-marino shadow-sm transition hover:bg-agua-claro"
+        className="mt-6 flex flex-col items-center gap-1 rounded-2xl bg-agua px-6 py-8 text-center font-semibold text-marino shadow-sm transition hover:bg-agua-claro"
       >
-        Registrar captura
+        <span className="text-xl">Registrar captura</span>
+        <span className="text-sm font-normal text-marino/80">
+          Foto, voz o escrita a mano
+        </span>
       </Link>
 
       <p className="mt-4 text-sm text-marino/60">
-        Saca una foto o dícelo en voz alta. La trazabilidad se completa sola y tu pesca
-        queda publicada al instante.
+        La trazabilidad se completa sola con los datos de tu captura y tu pesca queda
+        publicada al instante.
       </p>
 
       <section className="mt-10">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-marino/50">
-          Mis productos
-        </h2>
+        <SeccionTitulo>Mi pesca publicada</SeccionTitulo>
         <MisProductos />
       </section>
-    </div>
+    </PageShell>
   );
 }
