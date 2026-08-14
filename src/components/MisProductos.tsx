@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { EstadoVacio, SkeletonLista } from "@/components/Skeleton";
+import { SugerenciaPrecioPanel } from "@/components/SugerenciaPrecioPanel";
 import { TarjetaProducto } from "@/components/TarjetaProducto";
 import { formatearPesos } from "@/lib/pricing";
 import type { ApiResponse, MarketplaceResponse, ProductoPublico } from "@/lib/types";
@@ -141,7 +142,15 @@ export function MisProductos() {
               producto={p}
               compacta
               pie={
-                <div className="flex flex-wrap items-end gap-3">
+                <div className="space-y-4">
+                  <SugerenciaPrecioPanel
+                    productoId={p.id}
+                    onUsarPrecio={(precioKg) =>
+                      actualizar(p.id, { precioInput: String(precioKg), error: "" })
+                    }
+                  />
+
+                  <div className="flex flex-wrap items-end gap-3">
                   <div>
                     <label
                       htmlFor={campoId}
@@ -190,6 +199,7 @@ export function MisProductos() {
                       {ed.error}
                     </p>
                   )}
+                  </div>
                 </div>
               }
             />

@@ -162,6 +162,38 @@ Igual que arriba pero **sin escribir** en la BD. Para mostrar la explicación si
 
 ---
 
+### `GET /api/marketplace/[productoId]/sugerencia`
+Sugerencia de precio para evitar merma. **Solo lectura: no escribe precios.** Es el
+motor que reemplaza la tabla fija de tramos como criterio de recomendación.
+
+```ts
+data: {
+  precioBaseKg, precioActualKg, precioSugeridoKg
+  reduccionPct: number        // respecto del precio base
+  diferenciaKg: number        // contra el precio que ve el comprador hoy
+  tendencia: "alcista" | "bajista" | "estable"
+  horasPublicado, vidaUtilHoras, riesgoMerma
+  factores: Array<{ id, etiqueta, puntosPct, detalle, senal?, simulada? }>
+  justificacion: string
+  senalesUsadas: string[]
+  degradado: boolean          // true = la IA no respondió, explicación por plantilla
+  modeloIa?: string
+}
+```
+
+**Reparto entre reglas e IA:** el número lo deciden las reglas de
+`src/lib/sugerencia-precio.ts` (vida útil de la especie, clima, turismo y día de la
+semana, oferta regional, con piso por riesgo de merma y techo de 40%). El LLM solo
+redacta la frase sobre las señales recuperadas. Un precio que cambia de valor entre
+dos consultas no es defendible, y decir esto en el pitch suma en uso apropiado de IA.
+
+`diferenciaKg` se compara contra `precioMostradoKg()`, que deriva el precio igual que
+`GET /api/marketplace`. No contra `Producto.precioActualKg`, que es caché.
+
+Las señales viven en `src/data/senales-precio.json` con valores ficticios rotulados
+`simulada: true` y estructura de fuente real; el archivo documenta con qué fuente se
+reemplaza cada tipo (meteorología marítima, SERNATUR, desembarques de SERNAPESCA).
+
 ## Pedidos y sugerencias (P1 — implementado por Rubén)
 
 ### `POST /api/pedidos`
