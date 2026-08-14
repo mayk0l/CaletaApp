@@ -13,11 +13,21 @@ export async function POST(request: Request) {
     const foto = formData.get("foto") as File | null;
     const pescadorId = formData.get("pescadorId") as string | null;
 
-    if (!foto || !pescadorId) {
+    if (!foto) {
       return NextResponse.json(
-        apiError("VALIDACION", "Falta foto o pescadorId."),
+        apiError("VALIDACION", "Falta el archivo de foto."),
         { status: 400 },
       );
+    }
+
+    // Resolver pescador (demo: usar el primero si no se especifica)
+    let pid = pescadorId;
+    if (!pid) {
+      const primero = await prisma.pescador.findFirst();
+      pid = primero?.id;
+    }
+    if (!pid) {
+      return NextResponse.json(apiError("NO_ENCONTRADO", "No hay pescadores registrados."), { status: 404 });
     }
 
     const bytes = new Uint8Array(await foto.arrayBuffer());
@@ -28,7 +38,7 @@ export async function POST(request: Request) {
     // Guardar captura con respuesta cruda del modelo
     const captura = await prisma.captura.create({
       data: {
-        pescadorId,
+        pescadorId: pid,
         especieNombre: reconocimiento.especie,
         cantidad: reconocimiento.cantidad,
         pesoKg: reconocimiento.pesoKgEstimado,

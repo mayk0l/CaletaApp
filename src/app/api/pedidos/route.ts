@@ -12,17 +12,27 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { restauranteId, especie, cantidadKg } = body;
 
-    if (!restauranteId || !especie || !cantidadKg) {
+    if (!especie || !cantidadKg) {
       return NextResponse.json(
-        apiError("VALIDACION", "Faltan campos: restauranteId, especie, cantidadKg."),
+        apiError("VALIDACION", "Faltan campos: especie, cantidadKg."),
         { status: 400 },
       );
+    }
+
+    // Resolver restaurante (demo: usar el primero si no se especifica)
+    let rid = restauranteId;
+    if (!rid) {
+      const primero = await prisma.restaurante.findFirst();
+      rid = primero?.id;
+    }
+    if (!rid) {
+      return NextResponse.json(apiError("NO_ENCONTRADO", "No hay restaurantes registrados."), { status: 404 });
     }
 
     // Crear pedido
     const pedido = await prisma.pedido.create({
       data: {
-        restauranteId,
+        restauranteId: rid,
         especieNombre: especie,
         cantidadKg,
         estado: "cola",

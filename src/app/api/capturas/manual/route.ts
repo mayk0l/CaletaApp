@@ -11,16 +11,26 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { pescadorId, especie, cantidad, pesoKg, largoCm } = body;
 
-    if (!pescadorId || !especie || !pesoKg) {
+    if (!especie || !pesoKg) {
       return NextResponse.json(
-        apiError("VALIDACION", "Faltan campos: pescadorId, especie, pesoKg."),
+        apiError("VALIDACION", "Faltan campos: especie, pesoKg."),
         { status: 400 },
       );
     }
 
+    // Resolver pescador: usar el ID dado o el primero disponible (demo)
+    let pid = pescadorId;
+    if (!pid) {
+      const primero = await prisma.pescador.findFirst();
+      pid = primero?.id;
+    }
+    if (!pid) {
+      return NextResponse.json(apiError("NO_ENCONTRADO", "No hay pescadores registrados."), { status: 404 });
+    }
+
     const captura = await prisma.captura.create({
       data: {
-        pescadorId,
+        pescadorId: pid,
         especieNombre: especie,
         cantidad: cantidad ?? 1,
         pesoKg,
