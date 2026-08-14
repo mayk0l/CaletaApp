@@ -26,6 +26,49 @@ interface RespuestaCruda {
 /** Techo de palabras de la frase: tiene que caber en una tarjeta del móvil. */
 const MAX_PALABRAS = 25;
 
+/**
+ * Vocativos que el modelo agrega por su cuenta cuando se le pide "español de
+ * Chile": hermano, compadre, oye. No los pidió nadie, cambian en cada respuesta
+ * y en pantalla suenan a caricatura. El prompt ya los prohíbe; esto es el
+ * seguro, porque el tono de la demo no puede depender de que el modelo obedezca.
+ */
+const VOCATIVOS = [
+  "hermano",
+  "hermana",
+  "compadre",
+  "compare",
+  "amigo",
+  "amiga",
+  "oye",
+  "mira",
+  "ojo",
+  "estimado",
+  "don",
+  "señor",
+  "pescador",
+  "colega",
+  "weon",
+  "weón",
+];
+
+/** Quita el vocativo inicial si el modelo lo agregó, y deja la frase capitalizada. */
+export function limpiarVocativo(frase: string): string {
+  let texto = frase.trim();
+
+  // Puede venir encadenado: "Oye, hermano, sube el precio…"
+  for (let i = 0; i < 3; i++) {
+    const coincide = texto.match(/^([\p{L}]+)\s*[,:]\s*(.+)$/u);
+    if (!coincide) break;
+
+    const primera = coincide[1].toLowerCase();
+    if (!VOCATIVOS.includes(primera)) break;
+    texto = coincide[2].trim();
+  }
+
+  texto = texto.replace(/!+/g, ".").replace(/\.\.+$/, ".");
+  return texto.charAt(0).toLocaleUpperCase("es-CL") + texto.slice(1);
+}
+
 export interface ExplicacionIa {
   justificacion: string;
   senalesUsadas: string[];
@@ -69,9 +112,12 @@ ${factores}
 Señales de contexto disponibles:
 ${contexto || "(sin señales relevantes)"}
 
-Escribe UNA frase de máximo ${MAX_PALABRAS} palabras, en español de Chile, tratando al pescador de tú,
+Escribe UNA frase de máximo ${MAX_PALABRAS} palabras, en español de Chile neutro, tratando al pescador de tú,
 que explique por qué conviene ese precio. Nombra el factor o la señal concreta que más pesó.
-La frase DEBE ser coherente con la dirección indicada arriba: no digas "baja" si el precio sube.
+Empieza directamente con la recomendación o con el dato. NO uses vocativos ni saludos:
+nada de "hermano", "compadre", "oye", "amigo", "mira" ni el nombre del pescador.
+No uses signos de exclamación. La frase DEBE ser coherente con la dirección indicada arriba:
+no digas "baja" si el precio sube.
 NO cambies el porcentaje ni el precio: ya están decididos. No inventes señales que no estén arriba.
 
 Responde SOLO este JSON:
@@ -96,7 +142,7 @@ Responde SOLO este JSON:
   }
 
   return {
-    justificacion,
+    justificacion: limpiarVocativo(justificacion),
     senalesUsadas: parsed.senales_usadas?.length
       ? parsed.senales_usadas
       : sugerencia.senalesUsadas,

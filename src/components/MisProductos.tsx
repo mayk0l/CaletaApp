@@ -6,6 +6,7 @@ import { EstadoVacio, SkeletonLista } from "@/components/Skeleton";
 import { SugerenciaPrecioPanel } from "@/components/SugerenciaPrecioPanel";
 import { TarjetaProducto } from "@/components/TarjetaProducto";
 import { formatearPesos } from "@/lib/pricing";
+import type { SugerenciaPrecio } from "@/lib/sugerencia-precio";
 import type { ApiResponse, MarketplaceResponse, ProductoPublico } from "@/lib/types";
 
 /**
@@ -32,26 +33,52 @@ function edicionInicial(p: ProductoPublico): Edicion {
   };
 }
 
+type SugerenciaConProducto = SugerenciaPrecio & { productoId: string; especie: string };
+
 export function MisProductos() {
   const [productos, setProductos] = useState<ProductoPublico[]>([]);
+  const [sugerencias, setSugerencias] = useState<Record<string, SugerenciaConProducto>>({});
+  const [urgenteId, setUrgenteId] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
   const [edicion, setEdicion] = useState<Record<string, Edicion>>({});
 
   const cargar = useCallback(async () => {
     try {
-      const resp = await fetch("/api/marketplace");
-      const json: ApiResponse<MarketplaceResponse> = await resp.json();
-      if (!json.ok) return;
+      // En paralelo: los productos y los indicadores de precio. Los indicadores
+      // son capa determinista, así que llegan en milisegundos y se pintan solos
+      // sin que el pescador tenga que pedirlos.
+      const [respProductos, respSugerencias] = await Promise.all([
+        fetch("/api/marketplace"),
+        fetch("/api/sugerencias-precio"),
+      ]);
 
-      setProductos(json.data.productos);
-      setEdicion((previo) => {
-        const siguiente: Record<string, Edicion> = {};
-        for (const p of json.data.productos) {
-          // Conserva lo que el pescador esté escribiendo si ya había una edición.
-          siguiente[p.id] = previo[p.id] ?? edicionInicial(p);
-        }
-        return siguiente;
-      });
+      const jsonProductos: ApiResponse<MarketplaceResponse> = await respProductos.json();
+      if (jsonProductos.ok) {
+        setProductos(jsonProductos.data.productos);
+        setEdicion((previo) => {
+          const siguiente: Record<string, Edicion> = {};
+          for (const p of jsonProductos.data.productos) {
+            // Conserva lo que el pescador esté escribiendo si ya había edición.
+            siguiente[p.id] = previo[p.id] ?? edicionInicial(p);
+          }
+          return siguiente;
+        });
+      }
+
+      const jsonSugerencias: ApiResponse<{ sugerencias: SugerenciaConProducto[] }> =
+        await respSugerencias.json();
+      if (jsonSugerencias.ok) {
+        const porId: Record<string, SugerenciaConProducto> = {};
+        for (const s of jsonSugerencias.data.sugerencias) porId[s.productoId] = s;
+        setSugerencias(porId);
+
+        // El endpoint devuelve ordenado por urgencia. Solo al primero que de
+        // verdad necesita bajar se le pide la redacción del modelo.
+        const candidato = jsonSugerencias.data.sugerencias.find(
+          (s) => s.riesgoMerma || s.diferenciaKg < 0,
+        );
+        setUrgenteId(candidato?.productoId ?? null);
+      }
     } finally {
       setCargando(false);
     }
@@ -130,27 +157,71 @@ export function MisProductos() {
     );
   }
 
+  const necesitanAtencion = productos.filter((p) => {
+    const s = sugerencias[p.id];
+    return s && (s.riesgoMerma || s.diferenciaKg < 0);
+  });
+
   return (
-    <ul className="mt-3 space-y-4">
-      {productos.map((p) => {
-        const ed = edicion[p.id] ?? edicionInicial(p);
-        const campoId = `precio-${p.id}`;
+    <>
+      {necesitanAtencion.length > 0 && (
+        <div
+          role="status"
+          className="mt-3 rounded-2xl bg-cobre/15 p-4 ring-1 ring-cobre/30"
+        >
+          <p className="font-semibold text-marino">
+            {necesitanAtencion.length === 1
+              ? "1 producto necesita que le bajes el precio"
+              : `${necesitanAtencion.length} productos necesitan que les bajes el precio`}
+          </p>
+          <ul className="mt-1 space-y-0.5 text-sm text-marino/80">
+            {necesitanAtencion.map((p) => {
+              const s = sugerencias[p.id];
+              return (
+                <li key={p.id} className="capitalize">
+                  {p.especie}: a{" "}
+                  <span className="tabular-nums">
+                    {formatearPesos(s.precioSugeridoKg)}
+                  </span>
+                  /kg
+                  {s.riesgoMerma && (
+                    <span className="ml-1 font-medium text-cobre">
+                      · quedan {Math.max(0, Math.round(s.vidaUtilHoras - s.horasPublicado))} h
+                      de venta
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
-        return (
-          <li key={p.id}>
-            <TarjetaProducto
-              producto={p}
-              compacta
-              pie={
-                <div className="space-y-4">
-                  <SugerenciaPrecioPanel
-                    productoId={p.id}
-                    onUsarPrecio={(precioKg) =>
-                      actualizar(p.id, { precioInput: String(precioKg), error: "" })
-                    }
-                  />
+      <ul className="mt-3 space-y-4">
+        {productos.map((p) => {
+          const ed = edicion[p.id] ?? edicionInicial(p);
+          const campoId = `precio-${p.id}`;
+          const sugerencia = sugerencias[p.id];
 
-                  <div className="flex flex-wrap items-end gap-3">
+          return (
+            <li key={p.id}>
+              <TarjetaProducto
+                producto={p}
+                compacta
+                pie={
+                  <div className="space-y-4">
+                    {sugerencia && (
+                      <SugerenciaPrecioPanel
+                        productoId={p.id}
+                        sugerencia={sugerencia}
+                        explicarConIa={p.id === urgenteId}
+                        onUsarPrecio={(precioKg) =>
+                          actualizar(p.id, { precioInput: String(precioKg), error: "" })
+                        }
+                      />
+                    )}
+
+                    <div className="flex flex-wrap items-end gap-3">
                   <div>
                     <label
                       htmlFor={campoId}
@@ -199,13 +270,14 @@ export function MisProductos() {
                       {ed.error}
                     </p>
                   )}
+                    </div>
                   </div>
-                </div>
-              }
-            />
-          </li>
-        );
-      })}
-    </ul>
+                }
+              />
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }
