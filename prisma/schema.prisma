@@ -1,0 +1,120 @@
+// Modelo de datos CaletaApp — ver docs/04-modelo-datos.md
+// Se aplica con: npx prisma db push   (sin migraciones: es un hackathon)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Pescador {
+  id          String     @id @default(cuid())
+  nombre      String
+  caleta      String
+  region      String     @default("Valparaíso")
+  rpaMock     String
+  embarcacion String?
+  capturas    Captura[]
+}
+
+model Especie {
+  id               String  @id @default(cuid())
+  nombre           String  @unique
+  nombreCientifico String?
+  precioBaseKg     Int
+  tallaMinimaCm    Int?
+  unidad           String  @default("kg")
+}
+
+model Captura {
+  id            String   @id @default(cuid())
+  pescador      Pescador @relation(fields: [pescadorId], references: [id])
+  pescadorId    String
+  especieNombre String
+  cantidad      Int      @default(1)
+  pesoKg        Float
+  largoCm       Float?
+
+  /// foto | voz | manual
+  metodo        String
+  confianzaIa   Float?
+  /// Respuesta cruda del modelo: evidencia de que la IA hizo algo real
+  iaRaw         Json?
+  fotoUrl       String?
+  transcripcion String?
+
+  /// pendiente | validada | enviada
+  estado        String   @default("pendiente")
+  creadaEn      DateTime @default(now())
+
+  formulario    Formulario?
+  producto      Producto?
+}
+
+model Formulario {
+  id              String    @id @default(cuid())
+  captura         Captura   @relation(fields: [capturaId], references: [id])
+  capturaId       String    @unique
+  camposFijos     Json
+  camposVariables Json
+  /// borrador | enviado_simulado
+  estadoEnvio     String    @default("borrador")
+  folioMock       String?
+  enviadoEn       DateTime?
+}
+
+model Producto {
+  id              String   @id @default(cuid())
+  captura         Captura  @relation(fields: [capturaId], references: [id])
+  capturaId       String   @unique
+  precioInicialKg Int
+  /// Caché para mostrar. La fuente de verdad es publicadoEn + pricing.ts
+  precioActualKg  Int
+  descuentoPct    Int      @default(0)
+  publicadoEn     DateTime @default(now())
+  ultimoAjuste    DateTime?
+  /// disponible | reservado | vendido | merma
+  estado          String   @default("disponible")
+  /// alcista | bajista | estable
+  tendencia       String?
+  justificacionIa String?
+  pedidos         Pedido[]
+}
+
+model SenalMercado {
+  id        String   @id @default(cuid())
+  /// clima | temporada_turistica | oferta_regional
+  tipo      String
+  titulo    String
+  contenido String
+  valor     Float?
+  fecha     DateTime @default(now())
+  /// Se refleja como badge en la UI. Honestidad explícita.
+  simulada  Boolean  @default(true)
+  fuente    String?
+}
+
+model Restaurante {
+  id               String   @id @default(cuid())
+  nombre           String
+  comuna           String
+  selloCertificado Boolean  @default(false)
+  pedidos          Pedido[]
+}
+
+model Pedido {
+  id            String      @id @default(cuid())
+  restaurante   Restaurante @relation(fields: [restauranteId], references: [id])
+  restauranteId String
+  especieNombre String
+  cantidadKg    Float
+  /// cola | match | resuelto
+  estado        String      @default("cola")
+  producto      Producto?   @relation(fields: [productoId], references: [id])
+  productoId    String?
+  scoreMatch    Float?
+  creadoEn      DateTime    @default(now())
+}

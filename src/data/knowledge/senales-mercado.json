@@ -1,0 +1,71 @@
+{
+  "_nota": "Base de conocimiento del RAG de precios. Estructura real, valores SIMULADOS y rotulados como tales (docs/06-ia-y-prompts.md). Manuel: agregar señales hasta llegar a ~15-20 documentos y precalcular embeddings a JSON.",
+  "senales": [
+    {
+      "id": "clima_001",
+      "tipo": "clima",
+      "titulo": "Pronóstico marítimo Valparaíso · 14-08-2026",
+      "contenido": "Marejadas anunciadas desde el sábado con probable suspensión de zarpe en las caletas de la bahía. Se espera menor oferta de pesca fresca durante el fin de semana.",
+      "fecha": "2026-08-14",
+      "simulada": true
+    },
+    {
+      "id": "clima_002",
+      "tipo": "clima",
+      "titulo": "Condición de mar estable · semana del 11-08-2026",
+      "contenido": "Vientos moderados y mar tranquilo durante la semana, con jornadas de pesca normales en Caleta Portales y caletas vecinas.",
+      "fecha": "2026-08-11",
+      "simulada": true
+    },
+    {
+      "id": "turismo_001",
+      "tipo": "temporada_turistica",
+      "titulo": "Ocupación hotelera Valparaíso · agosto 2026",
+      "contenido": "Agosto es temporada baja en la región. La demanda gastronómica se concentra en viernes y sábado, con caída marcada de lunes a jueves.",
+      "fecha": "2026-08-01",
+      "simulada": true
+    },
+    {
+      "id": "turismo_002",
+      "tipo": "temporada_turistica",
+      "titulo": "Demanda de restaurantes de borde costero · fines de semana de agosto",
+      "contenido": "Los restaurantes de Valparaíso y Viña del Mar aumentan sus pedidos de pescado fresco los jueves por la tarde para abastecer el fin de semana.",
+      "fecha": "2026-08-06",
+      "simulada": true
+    },
+    {
+      "id": "oferta_001",
+      "tipo": "oferta_regional",
+      "titulo": "Oferta regional de jaiba · semana del 11-08-2026",
+      "contenido": "Varias caletas de la región desembarcaron jaiba por sobre el promedio semanal. Hay presión a la baja en el precio por sobreoferta.",
+      "fecha": "2026-08-11",
+      "simulada": true
+    },
+    {
+      "id": "oferta_002",
+      "tipo": "oferta_regional",
+      "titulo": "Oferta regional de congrio · semana del 11-08-2026",
+      "contenido": "Desembarques de congrio por debajo del promedio. Baja disponibilidad regional y demanda sostenida de restaurantes.",
+      "fecha": "2026-08-11",
+      "simulada": true
+    },
+    {
+      "id": "oferta_003",
+      "tipo": "oferta_regional",
+      "titulo": "Jibia: principal recurso regional con capturas a la baja",
+      "contenido": "El boletín sectorial de SERNAPESCA para la Región de Valparaíso del 4º trimestre 2025 atribuye la caída de 21% en el volumen exportado regional a las bajas capturas de jibia, principal recurso de la región.",
+      "fecha": "2025-12-31",
+      "simulada": false,
+      "fuente": "Boletín Sectorial SERNAPESCA Valparaíso, 4T2025"
+    },
+    {
+      "id": "mercado_001",
+      "tipo": "oferta_regional",
+      "titulo": "Certificado de admisibilidad exigido por Estados Unidos desde 2026",
+      "contenido": "Desde el 1 de enero de 2026 Estados Unidos exige certificado de admisibilidad para toda exportación de recursos pesqueros chilenos, artesanal e industrial, incluida la reexportación vía terceros países. La trazabilidad documentada pasa a ser requisito de acceso a mercado.",
+      "fecha": "2026-01-01",
+      "simulada": false,
+      "fuente": "Boletín Sectorial SERNAPESCA Valparaíso, 4T2025"
+    }
+  ]
+}
