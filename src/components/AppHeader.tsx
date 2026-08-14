@@ -43,6 +43,7 @@ export function AppHeader() {
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  data-tour={item.href === "/marketplace" ? "nav-marketplace" : undefined}
                   aria-current={activo ? "page" : undefined}
                   className={`block rounded-lg px-3 py-2 transition ${
                     activo

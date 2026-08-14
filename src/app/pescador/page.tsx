@@ -3,11 +3,13 @@ import { BadgeSimulado } from "@/components/BadgeSimulado";
 import { MisProductos } from "@/components/MisProductos";
 import { OnboardingPescador } from "@/components/OnboardingPescador";
 import { PageShell, SeccionTitulo } from "@/components/PageShell";
+import { TourPescador } from "@/components/TourPescador";
 import { PESCADOR_DEMO } from "@/lib/mocks";
 
 /**
- * Home del pescador: un objetivo por pantalla (registrar la captura) más sus
- * productos publicados. Ver docs/07-diseno-ui.md
+ * Home del pescador: un objetivo por pantalla (registrar la captura) más su
+ * pesca publicada. Los `data-tour` son los anclajes del recorrido guiado
+ * (src/components/TourPescador.tsx). Ver docs/07-diseno-ui.md
  */
 export default function PescadorPage() {
   return (
@@ -20,6 +22,7 @@ export default function PescadorPage() {
 
       <Link
         href="/pescador/captura"
+        data-tour="registrar"
         className="mt-6 flex flex-col items-center gap-1 rounded-2xl bg-agua px-6 py-8 text-center font-semibold text-marino shadow-sm transition hover:bg-agua-claro"
       >
         <span className="text-xl">Registrar captura</span>
@@ -33,8 +36,10 @@ export default function PescadorPage() {
         a la venta al instante.
       </p>
 
-      <section className="mt-10">
-        <SeccionTitulo>Mi pesca publicada</SeccionTitulo>
+      <section className="mt-10" data-tour="mi-pesca">
+        <SeccionTitulo extra={<TourPescador etiqueta="Ver el recorrido" />}>
+          Mi pesca publicada
+        </SeccionTitulo>
         <MisProductos />
       </section>
     </PageShell>

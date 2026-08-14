@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
+import { TourPescador } from "@/components/TourPescador";
 
 /**
  * Bienvenida de 3 pasos para el pescador que entra por primera vez.
@@ -129,6 +130,17 @@ export function OnboardingPescador() {
         La sesión y el envío a SERNAPESCA son simulados en este prototipo, y están
         rotulados como tales en cada pantalla.
       </p>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <TourPescador etiqueta="Muéstrame dónde está cada cosa" variante="solido" />
+        <button
+          type="button"
+          onClick={cerrar}
+          className="text-sm text-crema/70 underline underline-offset-2 transition hover:text-crema"
+        >
+          Ya sé usarla
+        </button>
+      </div>
     </section>
   );
 }
