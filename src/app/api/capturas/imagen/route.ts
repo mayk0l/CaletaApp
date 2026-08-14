@@ -9,6 +9,16 @@ import { apiError, apiOk, UMBRAL_CONFIANZA, type CapturaResponse } from "@/lib/t
  *
  * multipart/form-data: foto (File), pescadorId (string)
  */
+
+/**
+ * Vercel corta las funciones a los 10 s por defecto en el plan Hobby. La cadena
+ * de 3 modelos con TIMEOUT_MULTIMODAL_MS de 15 s por intento puede llegar a 45 s
+ * en el peor caso (medido: 46 s y un 504 con cuerpo vacío, sin JSON de error).
+ * Sin esto, en producción el camino degradado no alcanza a devolver IA_TIMEOUT y
+ * el pescador ve un error de plataforma. 60 s es el techo del plan Hobby.
+ */
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   let form: FormData;
   try {

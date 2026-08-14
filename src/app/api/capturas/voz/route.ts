@@ -8,6 +8,15 @@ import { esErrorDeCuota, esErrorDeSobrecarga } from "@/lib/ai/client";
  * POST /api/capturas/voz — dueño: Manuel
  * Contrato: docs/05-api-contratos.md · Prompt: docs/06-ia-y-prompts.md
  */
+
+/**
+ * Mismo motivo que en /api/capturas/imagen: la cadena de 3 modelos a 15 s por
+ * intento puede superar los 10 s que Vercel da por defecto en Hobby, y docs/12
+ * §7 ya midió el camino de audio entre 19 s y 30 s cuando los dos primeros
+ * modelos fallan. 60 s es el techo del plan.
+ */
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   let form: FormData;
   try {

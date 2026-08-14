@@ -100,12 +100,23 @@ export function precioMostradoKg(
     ultimoAjuste?: Date | null;
   },
   ahora = new Date(),
+  especie?: string,
 ): number {
   const ajusteReciente =
     producto.ultimoAjuste != null &&
     ahora.getTime() - new Date(producto.ultimoAjuste).getTime() < 60 * 60_000;
 
   if (ajusteReciente) return producto.precioActualKg;
+
+  if (motorPorSenalesActivo() && especie) {
+    return sugerirPrecio({
+      especie,
+      precioBaseKg: producto.precioInicialKg,
+      precioPublicadoKg: producto.precioActualKg,
+      publicadoEn: producto.publicadoEn,
+      ahora,
+    }).precioSugeridoKg;
+  }
 
   const { descuentoPct } = tramoDe(horasDesde(producto.publicadoEn, ahora));
   return redondearAPesos(producto.precioInicialKg * (1 - descuentoPct / 100));
@@ -304,3 +315,93 @@ export {
   PESO_VIDA_UTIL_PCT,
   UMBRAL_RIESGO,
 };
+
+// ---------------------------------------------------------------- marketplace
+
+/**
+ * Interruptor del motor. Activo por defecto: un deploy que se olvide de poner la
+ * variable usa el motor por señales, que es el comportamiento que queremos.
+ * `PRECIO_POR_SENALES=0` vuelve a la tabla fija de TRAMOS sin tocar código, para
+ * poder revertir en segundos durante el ensayo si algo se ve raro.
+ */
+export function motorPorSenalesActivo(): boolean {
+  return process.env.PRECIO_POR_SENALES !== "0";
+}
+
+/** Etiqueta del estado de frescura, en reemplazo del nombre del tramo fijo. */
+export function etiquetaFrescura(horasPublicado: number, vidaUtil: number): string {
+  const fraccion = horasPublicado / vidaUtil;
+  if (fraccion < 0.25) return "Recién desembarcado";
+  if (fraccion < 0.5) return "Fresco";
+  if (fraccion < UMBRAL_RIESGO) return "Media vida";
+  if (fraccion < 1) return "Últimas horas";
+  return "Riesgo de merma";
+}
+
+export interface PrecioParaMarketplace {
+  precioActualKg: number;
+  descuentoPct: number;
+  horasPublicado: number;
+  etiquetaTramo: string;
+  riesgoMerma: boolean;
+  /** Horas hasta que el producto entra en riesgo de merma. null si ya entró. */
+  horasHastaProximoTramo: number | null;
+  /** Reducción que el motor sugerirá en ese momento, proyectada con la misma función. */
+  proximoDescuentoPct: number | null;
+  justificacion: string;
+}
+
+/**
+ * Adaptador para GET /api/marketplace: entrega los campos de `ProductoPublico`
+ * derivados del motor por señales en vez de la tabla fija.
+ *
+ * El contador "próximo tramo" pasa a ser algo más útil que un escalón arbitrario:
+ * cuántas horas faltan para que el producto entre en riesgo de merma, y qué
+ * reducción va a sugerir el motor en ese momento. La proyección se calcula
+ * llamando a la misma función pura con una hora futura.
+ */
+export function precioParaMarketplace(
+  producto: {
+    precioInicialKg: number;
+    precioActualKg: number;
+    publicadoEn: Date | string;
+    ultimoAjuste?: Date | null;
+  },
+  especie: string,
+  ahora = new Date(),
+): PrecioParaMarketplace {
+  const s = sugerirPrecio({
+    especie,
+    precioBaseKg: producto.precioInicialKg,
+    precioPublicadoKg: producto.precioActualKg,
+    publicadoEn: producto.publicadoEn,
+    ahora,
+  });
+
+  const horasHastaRiesgo = s.vidaUtilHoras * UMBRAL_RIESGO - s.horasPublicado;
+  const proyectar = horasHastaRiesgo > 0;
+
+  const proyeccion = proyectar
+    ? sugerirPrecio({
+        especie,
+        precioBaseKg: producto.precioInicialKg,
+        precioPublicadoKg: producto.precioActualKg,
+        publicadoEn: producto.publicadoEn,
+        ahora: new Date(ahora.getTime() + horasHastaRiesgo * 3_600_000),
+      })
+    : null;
+
+  return {
+    precioActualKg: s.precioSugeridoKg,
+    descuentoPct: s.reduccionPct,
+    horasPublicado: s.horasPublicado,
+    etiquetaTramo: etiquetaFrescura(s.horasPublicado, s.vidaUtilHoras),
+    riesgoMerma: s.riesgoMerma,
+    horasHastaProximoTramo: proyeccion ? Math.round(horasHastaRiesgo * 10) / 10 : null,
+    proximoDescuentoPct:
+      proyeccion && proyeccion.reduccionPct > s.reduccionPct
+        ? proyeccion.reduccionPct
+        : null,
+    justificacion: s.justificacion,
+  };
+}

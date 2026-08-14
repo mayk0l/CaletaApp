@@ -29,7 +29,7 @@ export async function GET() {
       ...sugerirPrecio({
         especie,
         precioBaseKg: p.precioInicialKg,
-        precioPublicadoKg: precioMostradoKg(p),
+        precioPublicadoKg: precioMostradoKg(p, new Date(), especie),
         publicadoEn: p.publicadoEn,
       }),
     };

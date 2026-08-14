@@ -40,7 +40,7 @@ export async function GET(
     especie,
     precioBaseKg: producto.precioInicialKg,
     // El precio que el comprador ve, no el caché de la BD.
-    precioPublicadoKg: precioMostradoKg(producto),
+    precioPublicadoKg: precioMostradoKg(producto, new Date(), especie),
     publicadoEn: producto.publicadoEn,
   });
 

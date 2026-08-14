@@ -10,6 +10,7 @@
 
 import { prisma } from "./db";
 import { calcularPrecioBase } from "./pricing";
+import { motorPorSenalesActivo, precioParaMarketplace } from "./sugerencia-precio";
 import {
   MAX_SUGERENCIAS,
   puntuar,
@@ -40,11 +41,10 @@ const COMUNA_POR_DEFECTO = "Valparaíso";
 // ---------------------------------------------------------------- productos
 
 /**
- * Misma derivación de precio que GET /api/marketplace: se calcula desde
- * publicadoEn con calcularPrecioBase() y el ajuste del RAG solo prima si tiene
- * menos de 1 h. Está duplicado a propósito en vez de importar del route handler:
- * el matching no debe depender de la ruta de Manuel. Si cambia el criterio allá,
- * hay que cambiarlo acá — está anotado en docs/05-api-contratos.md.
+ * Misma derivación de precio que GET /api/marketplace, y ahora literalmente la
+ * misma función: `precioParaMarketplace()` con el motor por señales, o la tabla
+ * fija de TRAMOS si PRECIO_POR_SENALES=0. Antes esto era una copia del criterio
+ * y había que acordarse de cambiar los dos lados.
  */
 export async function productosPublicos(): Promise<ProductoPublico[]> {
   const productos = await prisma.producto.findMany({
@@ -53,26 +53,46 @@ export async function productosPublicos(): Promise<ProductoPublico[]> {
     orderBy: { publicadoEn: "desc" },
   });
 
+  const porSenales = motorPorSenalesActivo();
+
   return productos.map((p): ProductoPublico => {
-    const base = calcularPrecioBase(p.precioInicialKg, p.publicadoEn);
+    const especie = p.captura.especieNombre;
     const ajusteReciente =
       p.ultimoAjuste !== null && Date.now() - p.ultimoAjuste.getTime() < 60 * 60_000;
 
+    const derivado = porSenales
+      ? precioParaMarketplace(p, especie)
+      : (() => {
+          const base = calcularPrecioBase(p.precioInicialKg, p.publicadoEn);
+          return {
+            precioActualKg: base.precioActualKg,
+            descuentoPct: base.descuentoPct,
+            horasPublicado: base.horasPublicado,
+            etiquetaTramo: base.etiquetaTramo,
+            riesgoMerma: base.riesgoMerma,
+            horasHastaProximoTramo: base.horasHastaProximoTramo,
+            proximoDescuentoPct: base.proximoDescuentoPct,
+            justificacion: "",
+          };
+        })();
+
     return {
       id: p.id,
-      especie: p.captura.especieNombre as ProductoPublico["especie"],
+      especie: especie as ProductoPublico["especie"],
       cantidad: p.captura.cantidad,
       pesoKg: p.captura.pesoKg,
       precioInicialKg: p.precioInicialKg,
-      precioActualKg: ajusteReciente ? p.precioActualKg : base.precioActualKg,
-      descuentoPct: base.descuentoPct,
-      horasPublicado: base.horasPublicado,
-      etiquetaTramo: base.etiquetaTramo,
-      horasHastaProximoTramo: base.horasHastaProximoTramo,
-      proximoDescuentoPct: base.proximoDescuentoPct,
-      estado: base.riesgoMerma ? "merma" : (p.estado as ProductoPublico["estado"]),
+      precioActualKg: ajusteReciente ? p.precioActualKg : derivado.precioActualKg,
+      descuentoPct: derivado.descuentoPct,
+      horasPublicado: derivado.horasPublicado,
+      etiquetaTramo: derivado.etiquetaTramo,
+      horasHastaProximoTramo: derivado.horasHastaProximoTramo,
+      proximoDescuentoPct: derivado.proximoDescuentoPct,
+      estado: derivado.riesgoMerma ? "merma" : (p.estado as ProductoPublico["estado"]),
       tendencia: (ajusteReciente ? p.tendencia : undefined) as ProductoPublico["tendencia"],
-      justificacionIa: ajusteReciente ? p.justificacionIa ?? undefined : undefined,
+      justificacionIa: ajusteReciente
+        ? p.justificacionIa ?? undefined
+        : derivado.justificacion || undefined,
       pescador: { nombre: p.captura.pescador.nombre, caleta: p.captura.pescador.caleta },
       selloCertificado: true,
     };
