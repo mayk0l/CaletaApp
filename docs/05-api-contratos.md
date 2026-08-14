@@ -187,6 +187,79 @@ semana, oferta regional, con piso por riesgo de merma y techo de 40%). El LLM so
 redacta la frase sobre las señales recuperadas. Un precio que cambia de valor entre
 dos consultas no es defendible, y decir esto en el pitch suma en uso apropiado de IA.
 
+---
+
+### `GET /api/marketplace/[productoId]/precio-ia`
+**Acá el número lo decide la IA**, no un motor determinista. Solo lectura: no escribe
+precios. Es el uso de IA que la hackathon pide —que analice datos y proponga— y por eso
+la respuesta trae el expediente completo para poder auditarla.
+
+```ts
+data: {
+  productoId, especie
+  precioBaseKg, precioPublicadoKg, precioSugeridoKg
+  reduccionPct, diferenciaKg, tendencia
+
+  decidioIa: boolean        // false = el modelo falló y decidió el motor de reglas
+  confianza: number         // 0..1, declarada por el propio modelo
+  fueAcotado: boolean       // true = la propuesta salía del rango y se recortó
+  modelo: string
+
+  justificacion: string     // frase para el pescador
+  razonamiento: string[]    // los pasos que dice haber seguido
+  datosUsados: string[]     // ids de señales o evidencia que cita
+  riesgo?: string
+
+  referencias: { porReglas: number, porMercado: number }
+  desvio: { vsReglasPct: number, vsMercadoPct: number }
+
+  simulada: true
+  analisis: { producto, mercado, senalesVigentes, evidencia }
+}
+```
+
+**Qué analiza:** serie histórica y variación semanal, pronóstico a 3 días de
+`src/lib/market/`, elasticidad estimada a la oferta, calidad del modelo (R² y MAPE
+contra el ingenuo), señales vigentes, evidencia recuperada con métricas, vida útil de
+la especie y porcentaje consumido, más las dos referencias deterministas.
+
+**Barreras:** rango acotado a 60-115% del precio base, fallback al motor de reglas si
+el modelo falla, no escribe el precio, y expone cuánto se desvió de cada referencia.
+Detalle y evidencia de que razona sobre los datos: `docs/06-ia-y-prompts.md`, capa D.
+
+Errores: `IA_CUOTA` (429), `IA_SOBRECARGA` (503), `IA_SIN_RESULTADO` (502),
+`NO_ENCONTRADO` (404).
+
+---
+
+### `GET /api/precios/prediccion?especie=congrio&dias=7`
+Proyección del precio de mercado de una especie, con la descomposición que la explica.
+No depende de un producto y no toca la BD.
+
+```ts
+data: {
+  especie, simulada: true
+  precioMercadoActualKg, factorDominante, variacionEsperadaPct, confianza
+
+  dias: Array<{
+    fecha, precioEsperadoKg, bandaInferiorKg, bandaSuperiorKg
+    variacionPct, efectoReversionPct
+    contribuciones: Array<{ factor, efectoPct }>   // oferta, clima, demanda, finDeSemana
+  }>
+
+  modelo: { coeficientes, r2, sigmaLog, persistenciaAr1, nObservaciones }
+  validacion: { mapePct, mapeIngenuoPct, coberturaBandaPct, nPrueba }
+  evidencia: Array<{ id, titulo, contenido, metricas, simulada, fuenteRealPendiente, score }>
+}
+```
+
+La descomposición es exacta: el producto de las contribuciones más la reversión
+reconstruye `variacionPct`. `validacion` viene en la respuesta a propósito, para poder
+decir cuánto se le puede creer al modelo en vez de pedir fe.
+
+Errores: `VALIDACION` (400) si falta `especie`, `NO_ENCONTRADO` (404) si la especie no
+tiene modelo de mercado.
+
 `diferenciaKg` se compara contra `precioMostradoKg()`, que deriva el precio igual que
 `GET /api/marketplace`. No contra `Producto.precioActualKg`, que es caché.
 

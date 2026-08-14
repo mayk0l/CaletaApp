@@ -50,6 +50,8 @@ export async function POST(
       justificacion: ajuste.justificacion,
       senalesUsadas: ajuste.senalesUsadas,
       degradado: false,
+      modelo: ajuste.modelo,
+      explicadoPorIa: ajuste.explicadoPorIa,
     };
   } catch {
     // Fallback: la regla determinista nunca falla. Ver docs/03-arquitectura.md, decisión 4.

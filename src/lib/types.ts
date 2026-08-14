@@ -179,6 +179,24 @@ export interface PrecioResponse {
   senalesUsadas: string[];
   /** true = la IA falló y se usó solo la regla base. No es un error. */
   degradado: boolean;
+  /**
+   * Trazabilidad del número: qué proyectó el modelo de mercado y cuánto se le
+   * puede creer. Opcional para no romper clientes viejos.
+   * Ver src/lib/market/forecast.ts y docs/13-datos-mercado.md
+   */
+  modelo?: {
+    variacionEsperadaPct: number;
+    factorDominante: string;
+    confianza: number;
+    precioMercadoActualKg: number;
+    precioMercadoEsperadoKg: number;
+    r2: number;
+    mapePct: number;
+    mapeIngenuoPct: number;
+    fueAcotado: boolean;
+  };
+  /** true = la frase la escribió el LLM; false = plantilla derivada del modelo. */
+  explicadoPorIa?: boolean;
 }
 
 // ---------------------------------------------------------------- pedidos (P1)
