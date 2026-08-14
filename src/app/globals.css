@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+/**
+ * Paleta corporativa CaletaApp — ver docs/07-diseno-ui.md
+ * Uso semántico:
+ *   marino → headers, texto principal, institucional
+ *   agua   → acciones primarias, éxito, "fresco"
+ *   cobre  → descuentos, merma, urgencia, tendencia bajista
+ *   crema  → fondo general
+ */
+@theme {
+  --color-marino: #0f2c59;
+  --color-marino-claro: #1c4480;
+  --color-agua: #00a884;
+  --color-agua-claro: #34c9a7;
+  --color-cobre: #d97706;
+  --color-cobre-claro: #f0a339;
+  --color-crema: #f8faf2;
+
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
+}
+
+body {
+  background-color: var(--color-crema);
+  color: var(--color-marino);
+}
+
+/* Foco visible en todo elemento interactivo: accesibilidad mínima real. */
+:focus-visible {
+  outline: 3px solid var(--color-agua);
+  outline-offset: 2px;
+}
