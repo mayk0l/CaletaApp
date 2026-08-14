@@ -1,24 +1,27 @@
 # 09 · Plan de la noche
 
-**Ahora: jueves ~22:45. Pitch: viernes 10:00.** Quedan ~11 horas, no 18.
+**Ahora: jueves ~23:00. Pitch: viernes 10:00.** Quedan ~11 horas, no 18.
 El PRD original planificaba 18 h de trabajo: **ese plan no cabe**. Este es el plan que sí cabe,
 con P1 explícitamente sacrificable.
+
+El scaffolding y la documentación (CA-00) ya están hechos y pusheados, así que el bloque de
+setup arranca directo en las claves.
 
 ## Cronograma
 
 | Hora | Rubén (frontend) | Manuel (backend/IA) | Hito conjunto |
 |---|---|---|---|
-| **22:45–23:20** | Clonar, `npm install`, tokens de marca, layout + landing | Crear key de Gemini, crear DB en Neon, `prisma db push`, seed | ✅ **App corriendo local + deploy vacío en Vercel** |
-| **23:20–00:30** | `/pescador/captura` con pestañas + subida de foto contra `mocks.ts` | `POST /api/capturas/imagen` con Gemini vision | ✅ Foto → especie + peso en pantalla |
-| **00:30–01:30** | `/pescador/formulario/[id]` autocompletado + advertencias | `POST /api/capturas/voz` + `GET /api/formulario/[id]` | ✅ Voz funcionando, formulario lleno |
-| **01:30–02:00** | Botón validar → envío + badge simulado | `POST /formulario/[id]/enviar` + publicación automática | ✅ **Flujo end-to-end completo** |
-| **02:00–03:15** | `/marketplace` con precio, descuento, tendencia, "baja a −25% en 3 h" | `pricing.ts` + RAG de precio + `/api/marketplace/*` | ✅ **Precio bajando visible = el corazón del pitch** |
-| **03:15–04:00** | `/restaurante` + pedido (P1) | matching por score (P1) | P1 — se corta sin culpa si vamos atrasados |
-| **04:00–04:30** | Pulido visual, responsive, estados vacíos | Seed con datos realistas, fotos de demo en `public/demo/` | ✅ **CONGELAR ALCANCE** |
-| **04:30–05:15** | Deploy final a producción, probar en móvil real, generar QR | Probar los 3 caminos de IA en el deploy, no en local | ✅ URL pública funcionando |
-| **05:15–06:00** | Grabar video de respaldo del flujo completo (juntos) | | ✅ Plan B listo |
+| **23:00–23:30** | CA-20 deploy vacío en Vercel + env vars | CA-01 Gemini key · CA-02 Neon + seed | ✅ **URL pública viva + BD con datos** |
+| **23:30–00:45** | CA-21 captura con pestañas y foto | CA-03 visión end-to-end | ✅ Foto → especie + peso en pantalla |
+| **00:45–01:45** | CA-23 confianza · CA-24 formulario | CA-04 voz · CA-06 formulario | ✅ Voz funcionando, formulario lleno |
+| **01:45–02:15** | CA-24 validar y enviar | CA-05 manual · CA-07 enviar + publicar | ✅ **Flujo end-to-end completo** |
+| **02:15–03:30** | CA-25 marketplace real | CA-08 marketplace · CA-09 RAG · CA-10 precio | ✅ **Precio bajando visible = el corazón del pitch** |
+| **03:30–04:00** | CA-26 historial · CA-50 restaurante (P1) | CA-51 matching (P1) | P1 — se corta sin culpa si vamos atrasados |
+| **04:00–04:30** | CA-27 pulido | CA-28 fotos de demo probadas | ✅ **CONGELAR ALCANCE** |
+| **04:30–05:15** | CA-29 deploy final + QR + prueba en móvil | verificar los 3 caminos de IA en producción | ✅ URL pública funcionando |
+| **05:15–06:00** | CA-40 video de respaldo (juntos) | | ✅ Plan B listo |
 | **06:00–08:30** | **Dormir.** En serio | | |
-| **08:30–09:00** | Smoke test del deploy, cargar datos frescos de demo | | ✅ Todo verde |
+| **08:30–09:00** | CA-41 smoke test + datos frescos de demo | | ✅ Todo verde |
 | **09:00–10:00** | Ensayo con Joaquín (bloque oficial de la hackathon) | | ✅ 3 min cronometrados |
 
 ## Regla de corte por hora
@@ -27,8 +30,8 @@ Si a la hora indicada el hito no está, se corta lo de abajo:
 
 | Hora | Si no está listo... | Se corta |
 |---|---|---|
-| 01:30 | flujo foto → formulario | la parte de **voz** (se muestra como mockup) |
-| 03:15 | precio dinámico visible | **todo P1** (restaurante y matching) |
+| 01:45 | flujo foto → formulario | la parte de **voz** (CA-04, CA-22) se muestra como mockup |
+| 03:30 | precio dinámico visible | **todo P1** (CA-50 a CA-54) |
 | 04:30 | cualquier cosa | se congela: solo bugs y deploy |
 
 **Prioridad si hay que elegir una sola cosa:** el **precio dinámico** funcionando y visible.
