@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { BadgeSimulado } from "@/components/BadgeSimulado";
 import { FormularioPedido } from "@/components/FormularioPedido";
+import { PageShell, SeccionTitulo } from "@/components/PageShell";
+import { EstadoVacio } from "@/components/Skeleton";
 import { TarjetaSugerencia } from "@/components/TarjetaSugerencia";
 import { PESOS } from "@/lib/matching";
 import { explicarEspera } from "@/lib/matching";
@@ -29,13 +31,16 @@ export default async function RestaurantePage({
 
   if (!activo) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8">
-        <h1 className="text-2xl font-bold sm:text-3xl">Compra directo a la caleta</h1>
-        <p className="mt-6 rounded-xl border border-dashed border-marino/25 p-4 text-sm text-marino/60">
-          No hay restaurantes cargados. Corre <code>npm run seed</code> para poblar la
-          base de datos de demostración.
-        </p>
-      </div>
+      <PageShell
+        titulo="Compra directo a la caleta"
+        descripcion="Programa lo que necesitas y te sugerimos la mejor opción disponible."
+      >
+        <EstadoVacio
+          icono="🗄️"
+          titulo="No hay restaurantes cargados"
+          detalle="Corre npm run seed para poblar la base de datos de demostración."
+        />
+      </PageShell>
     );
   }
 
@@ -44,19 +49,12 @@ export default async function RestaurantePage({
   const resueltos = cola.filter((item) => item.resuelto);
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold sm:text-3xl">Compra directo a la caleta</h1>
-          <p className="mt-1 text-marino/70">
-            Programa lo que necesitas. Si todavía no hay pesca que calce, tu pedido queda
-            en cola y te sugerimos la mejor opción en cuanto se publique.
-          </p>
-        </div>
-        <BadgeSimulado texto="sesión simulada" />
-      </div>
-
-      <section className="mt-6" aria-label="Restaurante activo">
+    <PageShell
+      titulo="Compra directo a la caleta"
+      descripcion="Programa lo que necesitas. Si todavía no hay pesca que calce, tu pedido queda en cola y te sugerimos la mejor opción en cuanto se publique."
+      badge={<BadgeSimulado texto="sesión simulada" />}
+    >
+      <section aria-label="Restaurante activo">
         <ul className="flex flex-wrap gap-2">
           {restaurantes.map((r) => {
             const seleccionado = r.id === activo.id;
@@ -78,7 +76,7 @@ export default async function RestaurantePage({
                   {r.selloCertificado && (
                     <span
                       title="Compra con sello de Pesca Artesanal Certificada"
-                      className="text-agua"
+                      className={seleccionado ? "text-agua-claro" : "text-agua"}
                       aria-label="con sello certificado"
                     >
                       ✓
@@ -96,20 +94,26 @@ export default async function RestaurantePage({
       </div>
 
       <section className="mt-10" aria-label="Pedidos en cola">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-marino/50">
-            En cola ({enCola.length})
-          </h2>
-          <p className="text-xs text-marino/50">
-            {productos.length} producto{productos.length === 1 ? "" : "s"} publicado
-            {productos.length === 1 ? "" : "s"}
-          </p>
-        </div>
+        <SeccionTitulo
+          extra={
+            <p className="text-xs text-marino/50">
+              <span className="tabular-nums">{productos.length}</span> producto
+              {productos.length === 1 ? "" : "s"} publicado
+              {productos.length === 1 ? "" : "s"}
+            </p>
+          }
+        >
+          En cola ({enCola.length})
+        </SeccionTitulo>
 
         {enCola.length === 0 ? (
-          <p className="mt-3 rounded-xl bg-white p-4 text-sm text-marino/60 ring-1 ring-marino/10">
-            No tienes pedidos en cola. Programa uno arriba.
-          </p>
+          <div className="mt-3">
+            <EstadoVacio
+              icono="📋"
+              titulo="No tienes pedidos en cola"
+              detalle="Programa uno arriba: te avisamos con una sugerencia en cuanto haya pesca que calce."
+            />
+          </div>
         ) : (
           <ul className="mt-3 space-y-4">
             {enCola.map(({ pedido, estado, sugerencias }) => (
@@ -167,9 +171,7 @@ export default async function RestaurantePage({
 
       {resueltos.length > 0 && (
         <section className="mt-10" aria-label="Pedidos resueltos">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-marino/50">
-            Resueltos ({resueltos.length})
-          </h2>
+          <SeccionTitulo>Resueltos ({resueltos.length})</SeccionTitulo>
           <ul className="mt-3 space-y-3">
             {resueltos.map(({ pedido, scoreElegido }) => (
               <li
@@ -202,9 +204,7 @@ export default async function RestaurantePage({
 
       <section className="mt-10 rounded-2xl bg-white p-5 ring-1 ring-marino/10">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-marino/50">
-            Cómo se ordenan las sugerencias
-          </h2>
+          <SeccionTitulo>Cómo se ordenan las sugerencias</SeccionTitulo>
           <BadgeSimulado texto="reglas explícitas, sin LLM" />
         </div>
         <p className="mt-2 text-sm text-marino/70">
@@ -220,7 +220,7 @@ export default async function RestaurantePage({
           <Peso etiqueta="Anti-merma" puntos={PESOS.antiMerma} />
         </ul>
       </section>
-    </div>
+    </PageShell>
   );
 }
 

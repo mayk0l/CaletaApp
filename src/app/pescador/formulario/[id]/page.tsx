@@ -3,6 +3,8 @@
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BadgeSimulado } from "@/components/BadgeSimulado";
+import { PageShell, SeccionTitulo } from "@/components/PageShell";
+import { Skeleton } from "@/components/Skeleton";
 import type {
   ApiResponse,
   CamposFijos,
@@ -75,15 +77,35 @@ export default function FormularioPage({
 
   if (cargando) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-8">
-        <p className="text-marino/60">Cargando formulario…</p>
+      <div className="mx-auto max-w-3xl px-4 py-8 sm:py-10">
+        <Skeleton className="h-8 w-52" />
+        <Skeleton className="mt-3 h-4 w-full max-w-md" />
+        <div className="mt-8 space-y-4" role="status" aria-busy="true" aria-live="polite">
+          <span className="sr-only">Cargando el formulario de trazabilidad…</span>
+          <div className="rounded-2xl bg-white p-5 ring-1 ring-marino/10">
+            <Skeleton className="h-3 w-40" />
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {Array.from({ length: 6 }, (_, i) => (
+                <Skeleton key={i} className="h-9 w-full" />
+              ))}
+            </div>
+          </div>
+          <div className="rounded-2xl bg-white p-5 ring-1 ring-marino/10">
+            <Skeleton className="h-3 w-52" />
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {Array.from({ length: 6 }, (_, i) => (
+                <Skeleton key={i} className="h-9 w-full" />
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (error && !datos) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-8">
+      <div className="mx-auto max-w-3xl px-4 py-8 sm:py-10">
         <p className="rounded-xl bg-cobre/10 p-4 text-sm text-cobre" role="alert">
           {error}
         </p>
@@ -94,17 +116,13 @@ export default function FormularioPage({
   if (!datos) return null;
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
-      <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-2xl font-bold sm:text-3xl">Trazabilidad</h1>
-        <BadgeSimulado texto="envío simulado a SERNAPESCA" />
-      </div>
-      <p className="mt-2 text-marino/70">
-        Completado automáticamente desde tu captura. Revisa y confirma.
-      </p>
-
+    <PageShell
+      titulo="Trazabilidad"
+      descripcion="Completado automáticamente desde tu captura. Revisa y confirma."
+      badge={<BadgeSimulado texto="envío simulado a SERNAPESCA" />}
+    >
       {datos.advertencias.length > 0 && (
-        <ul className="mt-4 space-y-1 rounded-xl bg-cobre/10 p-4 text-sm text-cobre">
+        <ul className="space-y-1 rounded-xl bg-cobre/10 p-4 text-sm text-cobre" role="alert">
           {datos.advertencias.map((a) => (
             <li key={a}>{a}</li>
           ))}
@@ -138,7 +156,7 @@ export default function FormularioPage({
           {enviando ? "Enviando…" : "Validar y enviar"}
         </button>
       )}
-    </div>
+    </PageShell>
   );
 }
 
@@ -151,9 +169,7 @@ function Seccion<T extends Record<string, string | number | undefined>>({
 }) {
   return (
     <section className="mt-6 rounded-2xl bg-white p-5 ring-1 ring-marino/10">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-marino/50">
-        {titulo}
-      </h2>
+      <SeccionTitulo>{titulo}</SeccionTitulo>
       <dl className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
         {Object.entries(datos).map(([clave, valor]) => (
           <div key={clave}>

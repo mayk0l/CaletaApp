@@ -1,72 +1,99 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { BadgeSimulado } from "@/components/BadgeSimulado";
-import { PrecioDinamico } from "@/components/PrecioDinamico";
-import { mockMarketplace } from "@/lib/mocks";
-import { formatearHoras } from "@/lib/pricing";
+import { PageShell } from "@/components/PageShell";
+import { EstadoVacio, SkeletonLista } from "@/components/Skeleton";
+import { TarjetaProducto } from "@/components/TarjetaProducto";
+import type { ApiResponse, MarketplaceResponse, ProductoPublico } from "@/lib/types";
 
 /**
- * TODO(Rubén): reemplazar mockMarketplace por fetch a GET /api/marketplace
- * cuando Manuel tenga el endpoint. El contrato es idéntico (docs/05-api-contratos.md).
+ * Grilla del marketplace contra GET /api/marketplace (CA-25).
  *
- * Nota: `horasHastaProximoTramo` y `proximoDescuentoPct` los calcula el backend con
- * calcularPrecioBase(). No recalcular con Date.now() en el render: la regla de pureza
- * de React lo prohíbe y el lint lo bloquea.
+ * Antes usaba mockMarketplace, así que un producto publicado con el flujo real
+ * no aparecía acá. Contrato en docs/05-api-contratos.md.
+ *
+ * `horasHastaProximoTramo` y `proximoDescuentoPct` los calcula el backend: el
+ * render no puede llamar Date.now() (regla de pureza de React).
  */
 export default function MarketplacePage() {
-  const { productos } = mockMarketplace;
+  const [productos, setProductos] = useState<ProductoPublico[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+
+    fetch("/api/marketplace")
+      .then((r) => r.json())
+      .then((json: ApiResponse<MarketplaceResponse>) => {
+        if (cancelado) return;
+        if (!json.ok) {
+          setError(json.error.message);
+          return;
+        }
+        setProductos(json.data.productos);
+      })
+      .catch(() => {
+        if (!cancelado) setError("No se pudo cargar el marketplace.");
+      })
+      .finally(() => {
+        if (!cancelado) setCargando(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  const disponibles = productos.filter((p) => p.estado !== "vendido");
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold sm:text-3xl">Marketplace de la caleta</h1>
-          <p className="mt-1 text-marino/70">
-            Pesca fresca de Caleta Portales. El precio baja solo si el producto no se vende.
+    <PageShell
+      ancho="amplio"
+      titulo="Marketplace de la caleta"
+      descripcion="Pesca fresca de Caleta Portales. El precio baja solo si el producto no se vende."
+      badge={<BadgeSimulado texto="señales de mercado simuladas" />}
+      acciones={
+        !cargando && !error ? (
+          <p className="text-sm text-marino/60">
+            <span className="tabular-nums font-semibold text-marino">
+              {disponibles.length}
+            </span>{" "}
+            {disponibles.length === 1 ? "producto" : "productos"}
           </p>
-        </div>
-        <BadgeSimulado texto="datos de demostración" />
-      </div>
-
-      <ul className="mt-8 grid gap-4 sm:grid-cols-2">
-        {productos.map((p) => (
-          <li
-            key={p.id}
-            className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-marino/10"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold capitalize">{p.especie}</h2>
-                <p className="text-sm text-marino/60">
-                  {p.pesoKg} kg · {p.pescador.nombre} · {p.pescador.caleta}
-                </p>
-              </div>
-              {p.selloCertificado && (
-                <span className="rounded-full bg-agua/15 px-2 py-1 text-xs font-semibold text-agua">
-                  Pesca Artesanal Certificada
-                </span>
-              )}
-            </div>
-
-            <div className="mt-4">
-              <PrecioDinamico
-                precioInicialKg={p.precioInicialKg}
-                precioActualKg={p.precioActualKg}
-                descuentoPct={p.descuentoPct}
-                tendencia={p.tendencia}
-                justificacion={p.justificacionIa}
-                horasHastaProximoTramo={p.horasHastaProximoTramo}
-                proximoDescuentoPct={p.proximoDescuentoPct}
-              />
-            </div>
-
-            <p className="mt-4 border-t border-marino/10 pt-3 text-xs text-marino/50">
-              Publicado hace {formatearHoras(p.horasPublicado)} · {p.etiquetaTramo}
-              {p.estado === "merma" && (
-                <strong className="text-cobre"> · riesgo de merma</strong>
-              )}
-            </p>
-          </li>
-        ))}
-      </ul>
-    </div>
+        ) : null
+      }
+    >
+      {cargando ? (
+        <SkeletonLista cantidad={4} columnas={2} etiqueta="Cargando productos…" />
+      ) : error ? (
+        <p className="rounded-xl bg-cobre/10 p-4 text-sm text-cobre" role="alert">
+          {error}
+        </p>
+      ) : disponibles.length === 0 ? (
+        <EstadoVacio
+          titulo="Todavía no hay pesca publicada"
+          detalle="Cuando un pescador registre su captura y valide la trazabilidad, el producto aparece acá con su precio."
+          accion={
+            <Link
+              href="/pescador/captura"
+              className="rounded-xl bg-agua px-5 py-3 font-semibold text-marino transition hover:bg-agua-claro"
+            >
+              Registrar una captura
+            </Link>
+          }
+        />
+      ) : (
+        <ul className="grid gap-4 sm:grid-cols-2">
+          {disponibles.map((p) => (
+            <li key={p.id}>
+              <TarjetaProducto producto={p} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </PageShell>
   );
 }

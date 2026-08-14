@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
+import { AyudaFoto } from "@/components/AyudaFoto";
 import { PESCADOR_DEMO } from "@/lib/mocks";
 import { ESPECIES, UMBRAL_CONFIANZA, type ApiResponse, type CapturaResponse } from "@/lib/types";
 
@@ -99,9 +100,9 @@ export default function CapturaPage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-8">
-      <h1 className="text-2xl font-bold">Registrar captura</h1>
-      <p className="mt-1 text-sm text-marino/70">
+    <div className="mx-auto max-w-lg px-4 py-8 sm:py-10">
+      <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Registrar captura</h1>
+      <p className="mt-2 text-marino/70">
         La IA identifica especie y peso. Tú solo confirmas.
       </p>
 
@@ -123,7 +124,7 @@ export default function CapturaPage() {
               type="button"
               onClick={iniciarGrabacion}
               disabled={cargando}
-              className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-agua text-white shadow-lg transition hover:bg-agua-claro disabled:opacity-50"
+              className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-agua text-marino shadow-lg transition hover:bg-agua-claro disabled:opacity-50"
             >
               <span className="text-3xl">🎤</span>
             </button>
@@ -147,6 +148,7 @@ export default function CapturaPage() {
 
       {tab === "foto" && (
         <div className="mt-6">
+          <AyudaFoto />
           <input
             ref={cameraInputRef}
             type="file"
