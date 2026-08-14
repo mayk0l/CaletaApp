@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 /**
@@ -37,7 +38,16 @@ const CIFRAS = [
 export default function Home() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:py-16">
-      <p className="text-sm font-semibold uppercase tracking-wide text-agua">
+      <Image
+        src="/logo-caleta.png"
+        alt="CaletaApp"
+        width={512}
+        height={512}
+        priority
+        className="size-16 sm:size-20"
+      />
+
+      <p className="mt-6 text-sm font-semibold uppercase tracking-wide text-agua">
         Caleta Portales · Región de Valparaíso
       </p>
 

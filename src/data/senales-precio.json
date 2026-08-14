@@ -1,0 +1,95 @@
+{
+  "_nota": "Señales estructuradas para el motor de sugerencia de precio (src/lib/sugerencia-precio.ts). Los VALORES son ficticios y están rotulados con simulada:true, pero la ESTRUCTURA es la que tendría una fuente real: una serie con vigencia, dirección y magnitud. Las señales narrativas para el RAG viven aparte en senales-mercado.json.",
+  "_como_se_reemplaza_por_datos_reales": "clima → API meteorológica marítima (DMC / Windguru) mapeada a suspension_zarpe y altura de ola; turismo → ocupación hotelera SERNATUR + calendario de feriados; oferta_regional → desembarques diarios por especie del boletín de SERNAPESCA. El motor no cambia: solo cambia el origen de este JSON.",
+  "_nota_vida_util": "Horas desde el desembarque hasta que el producto deja de ser vendible como fresco, con cadena de frío de caleta. Ficticio pero ordenado por fragilidad real: los crustáceos y moluscos aguantan menos que el pescado de carne firme.",
+  "vida_util_horas": {
+    "congrio": 48,
+    "corvina": 48,
+    "merluza": 36,
+    "reineta": 40,
+    "lenguado": 44,
+    "jurel": 30,
+    "caballa": 28,
+    "albacora": 52,
+    "jibia": 36,
+    "jaiba": 24,
+    "loco": 30,
+    "erizo": 18,
+    "pulpo": 40,
+    "otra": 36
+  },
+  "senales": [
+    {
+      "id": "clima_marejada_sabado",
+      "tipo": "clima",
+      "titulo": "Marejadas anunciadas para el fin de semana",
+      "detalle": "Probable suspensión de zarpe en la bahía desde el sábado: la oferta de pesca fresca va a bajar los próximos días.",
+      "vigenteDesde": "2026-08-14T00:00:00-04:00",
+      "vigenteHasta": "2026-08-17T00:00:00-04:00",
+      "efecto": "sube_demanda_futura",
+      "puntosPct": -6,
+      "simulada": true
+    },
+    {
+      "id": "turismo_fin_de_semana",
+      "tipo": "temporada_turistica",
+      "titulo": "Demanda de restaurantes concentrada viernes y sábado",
+      "detalle": "Los restaurantes de borde costero compran el jueves por la tarde para abastecer el fin de semana.",
+      "vigenteDesde": "2026-08-01T00:00:00-04:00",
+      "vigenteHasta": "2026-08-31T00:00:00-04:00",
+      "efecto": "sube_demanda_hoy",
+      "puntosPct": -5,
+      "diasSemana": [4, 5, 6],
+      "simulada": true
+    },
+    {
+      "id": "turismo_temporada_baja",
+      "tipo": "temporada_turistica",
+      "titulo": "Agosto es temporada baja en la región",
+      "detalle": "De lunes a jueves la demanda gastronómica cae y el producto rota más lento.",
+      "vigenteDesde": "2026-08-01T00:00:00-04:00",
+      "vigenteHasta": "2026-08-31T00:00:00-04:00",
+      "efecto": "baja_demanda_hoy",
+      "puntosPct": 6,
+      "diasSemana": [1, 2, 3, 4],
+      "simulada": true
+    },
+    {
+      "id": "oferta_jaiba_alta",
+      "tipo": "oferta_regional",
+      "titulo": "Sobreoferta de jaiba en caletas vecinas",
+      "detalle": "Varias caletas desembarcaron jaiba por sobre el promedio semanal: hay presión a la baja.",
+      "vigenteDesde": "2026-08-11T00:00:00-04:00",
+      "vigenteHasta": "2026-08-18T00:00:00-04:00",
+      "efecto": "sobreoferta",
+      "puntosPct": 8,
+      "especies": ["jaiba"],
+      "simulada": true
+    },
+    {
+      "id": "oferta_congrio_baja",
+      "tipo": "oferta_regional",
+      "titulo": "Poca oferta regional de congrio",
+      "detalle": "Desembarques de congrio bajo el promedio con demanda sostenida de restaurantes.",
+      "vigenteDesde": "2026-08-11T00:00:00-04:00",
+      "vigenteHasta": "2026-08-18T00:00:00-04:00",
+      "efecto": "escasez",
+      "puntosPct": -7,
+      "especies": ["congrio"],
+      "simulada": true
+    },
+    {
+      "id": "oferta_jibia_baja_capturas",
+      "tipo": "oferta_regional",
+      "titulo": "Capturas de jibia a la baja en la región",
+      "detalle": "El boletín sectorial atribuye a las bajas capturas de jibia la caída del volumen exportado regional.",
+      "vigenteDesde": "2026-01-01T00:00:00-04:00",
+      "vigenteHasta": "2026-12-31T00:00:00-04:00",
+      "efecto": "escasez",
+      "puntosPct": -4,
+      "especies": ["jibia"],
+      "simulada": false,
+      "fuente": "Boletín Sectorial SERNAPESCA Valparaíso, 4T2025"
+    }
+  ]
+}

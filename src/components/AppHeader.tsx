@@ -1,11 +1,16 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 /**
  * Header marino con la ruta activa marcada. Saber dónde estás parado es la
  * diferencia más barata entre un prototipo y una app. Ver docs/07-diseno-ui.md
+ *
+ * El logo es la "C" de anzuelo de public/LOGO.jpeg, recortada a PNG con fondo
+ * transparente por scripts/extraer-logo.ps1. Acá va la versión blanca porque el
+ * azul de marca sobre el marino del header no tiene contraste suficiente.
  */
 const NAV = [
   { href: "/pescador", label: "Pescador" },
@@ -27,12 +32,14 @@ export function AppHeader() {
           className="flex items-center gap-2 font-semibold"
           aria-label="CaletaApp, ir al inicio"
         >
-          <span
-            aria-hidden
-            className="grid size-8 place-items-center rounded-full bg-agua text-lg font-bold text-marino"
-          >
-            C
-          </span>
+          <Image
+            src="/logo-caleta-blanco.png"
+            alt=""
+            width={512}
+            height={512}
+            priority
+            className="size-9 shrink-0"
+          />
           <span className="hidden sm:inline">CaletaApp</span>
         </Link>
 
