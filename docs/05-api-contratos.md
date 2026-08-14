@@ -147,26 +147,67 @@ Igual que arriba pero **sin escribir** en la BD. Para mostrar la explicación si
 
 ---
 
-## Pedidos (P1)
+## Pedidos y sugerencias (P1 — implementado por Rubén)
 
 ### `POST /api/pedidos`
 ```ts
 // request
 { restauranteId, especie, cantidadKg }
-// response
+// response 201
 data: { pedidoId, estado: "cola" }
+```
+
+Valida especie contra el catálogo, cantidad > 0 y ≤ 500 kg, y que el restaurante exista.
+Errores: `VALIDACION` (400) y `NO_ENCONTRADO` (404), con la envoltura de siempre.
+
+### `GET /api/pedidos?restauranteId=`
+Extensión del contrato: la cola completa con sus sugerencias, para pintar
+`/restaurante` en una sola llamada en vez de N+1.
+
+```ts
+data: {
+  pedidos: Array<{
+    pedidoId, restaurante, especie, cantidadKg
+    estado: "cola" | "match" | "resuelto"
+    candidatos: CandidatoMatch[]
+    productoElegidoId: string | null
+    scoreElegido: number | null
+  }>
+}
 ```
 
 ### `GET /api/pedidos/[pedidoId]/match`
 ```ts
 data: {
-  candidatos: Array<{ productoId, especie, pesoKg, precioActualKg, horasPublicado, score, motivo }>
+  candidatos: Array<{
+    productoId, especie, pesoKg, precioActualKg, horasPublicado, score, motivo
+    factores: Array<{ id, etiqueta, puntos, maximo, detalle }>   // desglose para la UI
+  }>
 }
 ```
 
-Score = reglas explícitas (especie exacta, frescura, cantidad suficiente, cercanía de caleta).
+Score = reglas explícitas en `src/lib/matching.ts`: filtro duro por especie, disponibilidad
+y cantidad suficiente; luego 100 puntos repartidos en frescura 30, precio 25, calce de
+cantidad 20, cercanía 15 y bonus anti-merma 10. A igual score, primero quien pidió antes.
 Se presenta como sistema de recomendación basado en reglas + score, **no** como "IA mágica".
 Ser preciso acá suma en el criterio de uso apropiado de IA.
+
+`factores` es un agregado sobre `CandidatoMatch`: todos los campos del tipo original siguen
+presentes, así que no rompe a nadie que consuma solo el contrato base.
+
+**Son sugerencias, no reservas.** Tomar una sugerencia marca el `Pedido` como `resuelto` con
+su `productoId` y `scoreMatch`, y **no toca `Producto.estado`**: el mismo producto puede
+sugerirse a varios pedidos y el marketplace no cambia. Así el matching no interfiere con la
+demo de precio dinámico.
+
+⚠️ `src/lib/pedidos.ts` deriva `ProductoPublico` con la misma lógica que
+`GET /api/marketplace` (precio desde `publicadoEn`, ajuste del RAG solo si tiene menos de
+1 h). Está duplicado a propósito para que el matching no dependa del route handler de
+Manuel: **si cambia el criterio de precio allá, hay que cambiarlo acá también.**
+
+Falta un campo para la compra programada a futuro (`requeridoPara`): hoy el pedido se
+encola sin fecha objetivo. Requiere 1 campo opcional aditivo en `prisma/schema.prisma`,
+que es zona de Manuel.
 
 ---
 
